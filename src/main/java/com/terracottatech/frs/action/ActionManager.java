@@ -55,12 +55,9 @@ public interface ActionManager {
    * On a return from this method, all {@link ActionManager#happened(Action)} and
    * {@link ActionManager#syncHappened(Action)} calls will block at entry, until the action manager
    * is resumed. This call comes out iff no more pending {@code happened()} and {@code syncHappened()} exists
-   * in any threads and all incoming calls starts blocking, thereby guaranteeing that the gate is completely
-   * closed.
-   * 
-   * @return the future that completes when the gating action is flushed to disk.
+   * in any threads and all incoming calls starts blocking, thereby guaranteeing that the gate is completely closed.
    */
-  Future<Void> pause() throws InterruptedException;
+  void pause() throws InterruptedException;
 
   /**
    * Pause action manager.

@@ -32,9 +32,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author tim
  */
 public class ActionManagerImpl implements ActionManager {
-  private enum State {
-    NORMAL, WAITING_TO_PAUSE, PAUSED
-  }
 
   private final LogManager             logManager;
   private final ObjectManager<?, ?, ?> objectManager;
@@ -43,10 +40,10 @@ public class ActionManagerImpl implements ActionManager {
   private final LogRecordFactory       logRecordFactory;
 
   private final AtomicInteger          happeningCount;
-  private volatile State               happenState;
   private final ReentrantLock          stateLock;
   private final Condition              happenedCondition;
   private final Condition              resumeCondition;
+  private volatile int pauseRequestCount = 0;
 
   public ActionManagerImpl(LogManager logManager, ObjectManager<?, ?, ?> objectManager,
                            EncryptionManager encryptionManager, ActionCodec actionCodec, LogRecordFactory logRecordFactory) {
@@ -56,7 +53,6 @@ public class ActionManagerImpl implements ActionManager {
     this.actionCodec = actionCodec;
     this.logRecordFactory = logRecordFactory;
     this.happeningCount = new AtomicInteger(0);
-    this.happenState = State.NORMAL;
     this.stateLock = new ReentrantLock();
     this.happenedCondition = this.stateLock.newCondition();
     this.resumeCondition = this.stateLock.newCondition();
@@ -103,44 +99,41 @@ public class ActionManagerImpl implements ActionManager {
   public Future<Void> syncHappenedAndPause(Action action) throws InterruptedException {
     stateLock.lock();
     try {
-      while (happenState != State.NORMAL) {
-        happenedCondition.await();
-      }
-      happenState = State.WAITING_TO_PAUSE;
-      // once we are out of normal state.. other thread entering happened at the same moment will
-      // get paused. If other thread has raced and won, the happening count will be non-zero and this
-      // thread will hold until the happened() thread completes.
-      if (happeningCount.get() == 0) {
-        happenState = State.PAUSED;
-      } else {
-        while (happeningCount.get() != 0 && happenState == State.WAITING_TO_PAUSE) {
-            this.happenedCondition.await();
-        }
-        if (happenState == State.WAITING_TO_PAUSE) {
-          happenState = State.PAUSED;
-        }
-      }
+      pauseHelper();
       return logManager.appendAndSync(wrapAction(action));
     } finally {
       stateLock.unlock();
     }
   }
   
+  // must be called under stateLock
+  private void pauseHelper() throws InterruptedException {
+    pauseRequestCount++;
+    while(happeningCount.get() > 0) {
+      happenedCondition.await();
+    } 
+  }
+  
   @Override
-  public Future<Void> pause() throws InterruptedException {
-    return syncHappenedAndPause(new NullAction());
+  public void pause() throws InterruptedException {
+    stateLock.lock();
+    try {
+      pauseHelper();
+    } finally {
+      stateLock.unlock();
+    }
   }
 
   @Override
   public void resume() {
     stateLock.lock();
     try {
-      if (happenState == State.NORMAL) {
-        return;
+      if (pauseRequestCount > 0) {
+        pauseRequestCount--;
+        if (pauseRequestCount == 0) {
+          resumeCondition.signalAll();
+        }
       }
-      happenState = State.NORMAL;
-      this.happenedCondition.signalAll();
-      this.resumeCondition.signalAll();
     } finally {
       stateLock.unlock();
     }
@@ -151,21 +144,20 @@ public class ActionManagerImpl implements ActionManager {
    * Uses an optimistic approach to avoid holding the stateLock during normal operations.
    * <p>
    * Optimistically increment and do an unprotected check with a volatile read to avoid holding locks as action manager
-   * changing state from NORMAL to anything else is rare and happens only during backups.
+   * pause is rare operation done during backup and rotating enc key.
    */
   private void enterHappened() {
     happeningCount.incrementAndGet();
-    if (happenState != State.NORMAL) {
+    if (pauseRequestCount > 0) {
       stateLock.lock();
       try {
-        if (happenState != State.NORMAL) {
-          int happenedCnt = happeningCount.decrementAndGet();
+        if (pauseRequestCount > 0) {
           try {
-            if (happenedCnt == 0) {
-              this.happenedCondition.signal();
+            if (happeningCount.decrementAndGet() == 0) {
+              this.happenedCondition.signalAll();
             }
             boolean interrupted = false;
-            while (happenState != State.NORMAL) {
+            while (pauseRequestCount > 0) {
               try {
                 resumeCondition.await();
               } catch (InterruptedException e) {
@@ -186,13 +178,13 @@ public class ActionManagerImpl implements ActionManager {
   }
 
   private void exitHappened() {
-    int numIn = happeningCount.decrementAndGet();
+    happeningCount.decrementAndGet();
     // ok to do a dirty check first..
-    if (happenState != State.NORMAL) {
+    if (pauseRequestCount > 0) {
       stateLock.lock();
       try {
-        if (numIn == 0 && happenState == State.WAITING_TO_PAUSE) {
-          this.happenedCondition.signal();
+        if (happeningCount.get() == 0) {
+          this.happenedCondition.signalAll();
         }
       } finally {
         stateLock.unlock();

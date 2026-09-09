@@ -23,9 +23,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -99,14 +101,12 @@ public class ActionManagerImplTest extends BaseActionManagerImplTest {
   }
 
   @Test
-  public void testAnotherPauseHangsUntillResume() throws Exception {
+  public void testAnotherPauseInParallelSucceeds() throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
       when(logMgr.appendAndSync(any(LogRecord.class))).thenAnswer(answerOnAppend(false, false, 0));
-      Future<Void> f = actionMgr.pause();
-      f.get();
-      assertThat(f.isDone(), is(true));
-
+      actionMgr.pause();
+      
       Future<?> anotherPause = executor.submit(() -> {
         try {
           actionMgr.pause();
@@ -115,12 +115,21 @@ public class ActionManagerImplTest extends BaseActionManagerImplTest {
         }
       });
 
-      Thread.sleep(50);
-      assertThat(anotherPause.isDone(), is(false));
-
-      actionMgr.resume();
-      anotherPause.get();
+      anotherPause.get(100, TimeUnit.MILLISECONDS);
       assertThat(anotherPause.isDone(), is(true));
+      scheduleResumeTask(100);
+      Action put = mock(Action.class);
+      Future<?> actionFuture = executor.submit(() ->  actionMgr.syncHappened(put));
+      try {
+        actionFuture.get(150, TimeUnit.MILLISECONDS);
+        fail();
+      } catch (TimeoutException exception) {
+        // expected
+      }
+      scheduleResumeTask(100);
+      actionFuture = executor.submit(() ->  actionMgr.syncHappened(put));
+      actionFuture.get();
+      assertThat(actionFuture.isDone(), is(true));
     } finally {
       executor.shutdownNow();
     }

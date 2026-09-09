@@ -39,8 +39,8 @@ public class NullActionManager implements ActionManager {
   }
 
   @Override
-  public Future<Void> pause() {
-    return null;
+  public void pause() {
+    
   }
 
   @Override

@@ -345,7 +345,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
         @Override
         public Future<Void> call() throws Exception {
           compactor.pause();
-          return new OuterFreezeFuture(actionManager.pause());
+          return new OuterFreezeFuture(actionManager.syncHappenedAndPause(new NullAction()));
         }
       });
       return shutdownTaskRef;
