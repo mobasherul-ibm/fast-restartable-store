@@ -368,7 +368,6 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
   private void initiateRewrite(long lsn) {
     compactor.compactTillLsn(lsn, executorService)
         .whenComplete((res, ex) -> {
-          compactor.unpause();
           if (ex != null) {
             if(state == State.RUNNING) {
               LOGGER.info("Encryption failed with latest key", ex);

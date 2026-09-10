@@ -30,6 +30,8 @@ import com.terracottatech.frs.object.ObjectManagerEntry;
 import com.terracottatech.frs.transaction.TransactionManager;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
@@ -66,8 +68,7 @@ public class CompactorImpl implements Compactor {
   private final int startThreshold;
 
   private CompactorThread compactorThread;
-  private volatile boolean signalPause;
-  private volatile boolean internalReWriteInProgress;
+  private volatile int pauseCount = 0;
   private boolean paused;
 
 
@@ -208,7 +209,7 @@ public class CompactorImpl implements Compactor {
      long lastLsn = 0;
  
       LOGGER.debug("range is " + rangeLsn + " ceiling:" + ceilingLsn + " base:" + baseLsn + " live:" + liveSize);
-      while (compactedCount < liveSize && !signalPause) {
+      while (compactedCount < liveSize && pauseCount == 0) {
         ObjectManagerEntry<ByteBuffer, ByteBuffer, ByteBuffer> compactionEntry = objectManager.acquireCompactionEntry((useLimiting)?baseLsn + rangeLsn:ceilingLsn);
         if (compactionEntry == null) {
           if (useLimiting && baseLsn + rangeLsn <= Math.min(logManager.currentLsn(), ceilingLsn) ) {
@@ -281,8 +282,7 @@ public class CompactorImpl implements Compactor {
 
   private synchronized boolean checkForPause() throws InterruptedException {
     boolean wasPaused = false;
-    if (signalPause) {
-      signalPause = false;
+    if (pauseCount > 0) {
       paused = true;
       notifyAll();
       while (paused) {
@@ -295,39 +295,36 @@ public class CompactorImpl implements Compactor {
 
   @Override
   public synchronized void pause() {
-    if (paused) {
-      return;
-    }
-    signalPause = true;
-    compactNow();
-    boolean interrupted = false;
-    while (!paused && signalPause) {
-      try {
-        wait();
-      } catch (InterruptedException e) {
-        interrupted = true;
+    pauseCount++;
+    if(!paused) {
+      compactNow();
+      boolean interrupted = false;
+      while (!paused) {
+        try {
+          wait();
+        } catch (InterruptedException e) {
+          interrupted = true;
+        }
       }
-    }
-    if (interrupted) {
-      Thread.currentThread().interrupt();
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
   @Override
   public synchronized void unpause() {
-    if (internalReWriteInProgress || (!paused && !signalPause)) {
-      return;
+    pauseCount--;
+    if(pauseCount == 0) {
+      paused = false;
+      notifyAll();
     }
-    signalPause = false;
-    paused = false;
-    notifyAll();
   }
   
   @Override
   public CompletionStage<Void> compactTillLsn(long lsn, ExecutorService executorService) {
     return CompletableFuture.runAsync(() -> {
       pause();
-      internalReWriteInProgress = true;
       try {
         rewrite(lsn);
       } catch (ExecutionException e) {
@@ -335,7 +332,7 @@ public class CompactorImpl implements Compactor {
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       } finally {
-        internalReWriteInProgress = false;
+        unpause();
       }
     }, executorService);
   }
@@ -343,23 +340,26 @@ public class CompactorImpl implements Compactor {
   private void rewrite(long lsn) throws ExecutionException, InterruptedException {
     long liveSize = objectManager.size();
     long compactedCount = 0;
+    List<Future<Void>> written = new ArrayList<>();
     while (compactedCount < liveSize) {
       ObjectManagerEntry<ByteBuffer, ByteBuffer, ByteBuffer> compactionEntry = objectManager.acquireCompactionEntry(lsn);
       if (compactionEntry == null) {
         break;
       }
       compactedCount++;
-      Future<Void> written;
       try {
         CompactionAction compactionAction = new CompactionAction(objectManager, compactionEntry);
-        written = actionManager.happened(compactionAction);
+        written.add(actionManager.happened(compactionAction));
         compactionAction.updateObjectManager();
       } finally {
         objectManager.releaseCompactionEntry(compactionEntry);
       }
 
       if (compactedCount % compactActionThrottle == 0) {
-        written.get();
+        for(Future<Void> fut : written) {
+          fut.get();
+        }
+        written = new ArrayList<>();
       }
     }
   }
