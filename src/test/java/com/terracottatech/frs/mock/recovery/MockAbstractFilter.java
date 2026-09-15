@@ -34,4 +34,14 @@ public abstract class MockAbstractFilter<T, U> implements Filter<T> {
   }
   
   protected abstract U convert(T element);
+  
+  @Override
+  public void finish() {
+    
+  } 
+  
+  @Override
+  public void checkError() {
+    
+  }
 }

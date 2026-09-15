@@ -16,6 +16,7 @@
 package com.terracottatech.frs.mock.recovery;
 
 import com.terracottatech.frs.action.ActionManager;
+import com.terracottatech.frs.cipher.EncryptionInRecoveryListener;
 import com.terracottatech.frs.mock.MockDeleteFilter;
 import com.terracottatech.frs.mock.transaction.MockTransactionFilter;
 import com.terracottatech.frs.recovery.Filter;
@@ -44,7 +45,7 @@ public class MockRecoveryManager implements RecoveryManager {
   }
 
   @Override
-  public Future<Void> recover(RecoveryListener ... listeners) {
+  public Future<Void> recover(RecoveryListener listener, EncryptionInRecoveryListener encryptionInRecoveryListener) {
     Iterator<LogRecord> it = logManager.startup();
 
     Filter<Action> replay = new MockReplayFilter();

@@ -15,6 +15,7 @@
  */
 package com.terracottatech.frs.recovery;
 
+import com.terracottatech.frs.cipher.EncryptionInRecoveryListener;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -60,7 +61,9 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
   private MapActionFactory mapActionFactory;
   private LogManager logManager;
   private RecoveryManager recoveryManager;
-
+  private RecoveryListener recoveryListener;
+  private EncryptionInRecoveryListener encryptionInRecoveryListener;
+  
   @Before
   public void setUp() throws Exception {
     ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager = mock(ObjectManager.class);
@@ -69,6 +72,8 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager = newLogManager();
     actionManager = newActionManager();
     recoveryManager = new RecoveryManagerImpl(logManager, actionManager, Configuration.getConfiguration(testFolder.newFolder()));
+    recoveryListener = mock(RecoveryListener.class);
+    encryptionInRecoveryListener = mock(EncryptionInRecoveryListener.class);
   }
 
   @Test
@@ -97,7 +102,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
 
     logManager.updateLowestLsn(8);
 
-    recoveryManager.recover();
+    recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
 
     verify(skipper).replay(9);
     verify(validTransactional).replay(12);
@@ -107,7 +112,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     @Test
   public void testRecoverZeroItems() throws Exception {
 
-    recoveryManager.recover();
+    recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
 
   }
     
@@ -116,7 +121,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.append(record(8, action(true)));
     logManager.updateLowestLsn(8);
 
-    recoveryManager.recover();
+    recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
   }
     
   @Test
@@ -126,7 +131,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.append(record(Constants.FIRST_LSN, errorAction));
 
     try {
-      recoveryManager.recover();
+      recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
       fail();
     } catch (RecoveryException e) {
       // Expected
@@ -139,7 +144,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.updateLowestLsn(Constants.FIRST_LSN);
 
     try {
-      recoveryManager.recover();
+      recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
       fail();
     } catch (RecoveryException e) {
       // Expected
@@ -171,7 +176,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.updateLowestLsn(Constants.FIRST_LSN);
 
     try {
-      recoveryManager.recover();
+      recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
       fail();
     } catch (RecoveryException e) {
       // Expected
@@ -199,7 +204,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
       setUp();
 
       logManager.append(record(Constants.FIRST_LSN, tcclCapture));
-      recoveryManager.recover();
+      recoveryManager.recover(recoveryListener, encryptionInRecoveryListener);
     } finally {
       Thread.currentThread().setContextClassLoader(previous);
     }
@@ -216,7 +221,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.append(record(Constants.FIRST_LSN + 1, encryptedAction(token, true)));
     logManager.append(record(Constants.FIRST_LSN + 2, encryptedAction(token, true)));
 
-    recoveryManager.recover((latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
+    recoveryManager.recover(recoveryListener, (latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
       assertEquals(token, latestEncToken);
       assertFalse(partialEncWithNewKey);
       assertEquals(0L, maxLsnForEncStart);
@@ -242,7 +247,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.append(record(lsnWithMismatch, encryptedAction(tokenA, true)));
     logManager.append(record(Constants.FIRST_LSN + 2, encryptedAction(tokenB, true)));
 
-    recoveryManager.recover((latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
+    recoveryManager.recover(recoveryListener, (latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
 
       // latestEncToken = tokenB (first EncryptedAction seen during iteration, highest LSN)
       assertEquals(tokenB, latestEncToken);
@@ -257,7 +262,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     // Plain (non-encrypted) actions only → listener called with null token, no partial, maxLsn=0
     logManager.append(record(Constants.FIRST_LSN, action(true)));
 
-    recoveryManager.recover((latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
+    recoveryManager.recover(recoveryListener, (latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
       assertNull(latestEncToken);
       assertFalse(partialEncWithNewKey);
       assertEquals(0L, maxLsnForEncStart);
@@ -273,7 +278,7 @@ public class RecoveryManagerImplTest extends AbstractRecoveryManagerImplTest {
     logManager.append(record(Constants.FIRST_LSN + 1, encryptedAction(token, true)));
     logManager.append(record(Constants.FIRST_LSN + 2, encryptedAction(token, true)));
 
-    recoveryManager.recover((latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
+    recoveryManager.recover(recoveryListener, (latestEncToken, partialEncWithNewKey, maxLsnForEncStart) -> {
       assertEquals(token, latestEncToken);
       assertFalse(partialEncWithNewKey);
       assertEquals(0L, maxLsnForEncStart);

@@ -31,4 +31,8 @@ public interface Filter<T> {
    * @return {@code true} if the record forms a valid part of the log.
    */
   boolean filter(T element, long lsn, boolean filtered);
+  
+  void finish() throws InterruptedException;
+  
+  void checkError() throws RecoveryException;
 }

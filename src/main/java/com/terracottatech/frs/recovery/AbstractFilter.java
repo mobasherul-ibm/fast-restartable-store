@@ -28,4 +28,14 @@ public abstract class AbstractFilter<T> implements Filter<T> {
   protected boolean delegate(T element, long lsn, boolean filtered) {
     return nextFilter.filter(element, lsn, filtered);
   }
+
+  @Override
+  public void finish() throws InterruptedException {
+    nextFilter.finish();
+  }
+
+  @Override
+  public void checkError() throws RecoveryException {
+    nextFilter.checkError();
+  }
 }

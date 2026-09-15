@@ -17,6 +17,7 @@ package com.terracottatech.frs.mock.recovery;
 
 import com.terracottatech.frs.recovery.Filter;
 import com.terracottatech.frs.action.Action;
+import com.terracottatech.frs.recovery.RecoveryException;
 
 /**
  *
@@ -33,5 +34,15 @@ class MockReplayFilter implements Filter<Action> {
       return true;
     }
   }
-  
+
+  @Override
+  public void finish() throws InterruptedException {
+    
+  }
+
+  @Override
+  public void checkError() throws RecoveryException {
+
+  }
+
 }

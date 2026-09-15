@@ -16,7 +16,7 @@
 package com.terracottatech.frs.transaction;
 
 import com.terracottatech.frs.action.Action;
-import com.terracottatech.frs.recovery.AbstractAdaptingFilter;
+import com.terracottatech.frs.recovery.AbstractFilter;
 import com.terracottatech.frs.recovery.Filter;
 
 import java.util.HashSet;
@@ -25,21 +25,12 @@ import java.util.Set;
 /**
  * @author tim
  */
-public class TransactionFilter extends AbstractAdaptingFilter<Action, Action> {
+public class TransactionFilter extends AbstractFilter<Action> {
   private final Set<TransactionHandle> openTransactions =
           new HashSet<TransactionHandle>();
 
   public TransactionFilter(Filter<Action> nextFilter) {
     super(nextFilter);
-  }
-
-  @Override
-  protected Action convert(Action element) {
-    if (element instanceof TransactionalAction) {
-      return ((TransactionalAction) element).getAction();
-    } else {
-      return element;
-    }
   }
 
   @Override

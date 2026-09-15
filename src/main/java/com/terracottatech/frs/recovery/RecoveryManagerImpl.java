@@ -15,7 +15,8 @@
  */
 package com.terracottatech.frs.recovery;
 
-import com.terracottatech.frs.cipher.EncryptedAction;
+import com.terracottatech.frs.cipher.EncryptionFilter;
+import com.terracottatech.frs.cipher.EncryptionInRecoveryListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,12 +54,8 @@ public class RecoveryManagerImpl implements RecoveryManager {
   private final LogManager logManager;
   private final ActionManager actionManager;
   private final boolean compressedSkipSet;
-  private final ReplayFilter replayFilter;
+  private final int availableProcessors;
   private final Configuration configuration;
-
-  private boolean isPartialEnc;
-  private long maxLsnTillReEnc;
-  private String latestEncToken;
   
   RecoveryManagerImpl(LogManager logManager, ActionManager actionManager, Configuration configuration, Runtime runtime) {
     this(logManager, actionManager, configuration, runtime.availableProcessors());
@@ -69,9 +66,7 @@ public class RecoveryManagerImpl implements RecoveryManager {
     this.logManager = logManager;
     this.actionManager = actionManager;
     this.compressedSkipSet = configuration.getBoolean(FrsProperty.RECOVERY_COMPRESSED_SKIP_SET);
-    this.replayFilter = new ReplayFilter(configuration.getInt(FrsProperty.RECOVERY_REPLAY_PER_BATCH_SIZE),
-        configuration.getInt(FrsProperty.RECOVERY_REPLAY_TOTAL_BATCH_SIZE_MAX),
-        configuration.getDBHome(), availableProcessors);
+    this.availableProcessors = availableProcessors;
     this.configuration = configuration;
   }
 
@@ -80,19 +75,20 @@ public class RecoveryManagerImpl implements RecoveryManager {
   }
 
   @Override
-  public Future<Void> recover(RecoveryListener ... listeners) throws RecoveryException,
+  public Future<Void> recover(RecoveryListener listener, EncryptionInRecoveryListener encryptionInRecoveryListener) throws RecoveryException,
           InterruptedException {
     Iterator<LogRecord> i = logManager.startup();
-    long filter = 0;
-    long put = 0;
-    long ntime = System.nanoTime();
 
-    Filter<Action> deleteFilter = new DeleteFilter(replayFilter);
+    Filter<Action> replayFilter = new ReplayFilter(listener, configuration.getInt(FrsProperty.RECOVERY_REPLAY_PER_BATCH_SIZE),
+        configuration.getInt(FrsProperty.RECOVERY_REPLAY_TOTAL_BATCH_SIZE_MAX),
+        configuration.getDBHome(), availableProcessors);
+    Filter<Action> encryptionFilter = new EncryptionFilter(encryptionInRecoveryListener, replayFilter);
+    Filter<Action> deleteFilter = new DeleteFilter(encryptionFilter);
     Filter<Action> transactionFilter = new TransactionFilter(deleteFilter);
     Filter<Action> skipsFilter = new SkipsFilter(transactionFilter, logManager.lowestLsn(),
                                                  compressedSkipSet);
     Filter<Action> progressLoggingFilter =
-            new ProgressLoggingFilter(replayFilter.dbHome, skipsFilter, logManager.lowestLsn());
+            new ProgressLoggingFilter(configuration.getDBHome(), skipsFilter, logManager.lowestLsn());
 
     // For now we're not spinning off another thread for recovery.
     long lastRecoveredLsn = Long.MAX_VALUE;
@@ -100,12 +96,8 @@ public class RecoveryManagerImpl implements RecoveryManager {
       while (i.hasNext()) {
         LogRecord logRecord = i.next();
         Action action = actionManager.extract(logRecord);
-        long ctime = System.nanoTime();
-        filter += (ctime - ntime);
         boolean replayed = progressLoggingFilter.filter(action, logRecord.getLsn(), false);
-        ntime = System.nanoTime();
-        put += (ntime - ctime);
-        replayFilter.checkError();
+        progressLoggingFilter.checkError();
         lastRecoveredLsn = logRecord.getLsn();
         if ( action instanceof Disposable ) {
           if ( !replayed ) {
@@ -118,19 +110,14 @@ public class RecoveryManagerImpl implements RecoveryManager {
     } catch ( IOException ioe ) {
       throw new RecoveryException("failed to restart", ioe);
     } finally {
-      replayFilter.finish();
-      replayFilter.checkError();
+      progressLoggingFilter.finish();
+      progressLoggingFilter.checkError();
     }
 
     if (lastRecoveredLsn != Long.MAX_VALUE && lastRecoveredLsn > logManager.lowestLsn()) {
       throw new RecoveryException("Recovery is incomplete for log " + configuration.getDBHome() + ". Files may be missing.");
     }
 
-    for (RecoveryListener listener : listeners) {
-      listener.recovered(latestEncToken, isPartialEnc, maxLsnTillReEnc);
-    }
-
-    LOGGER.debug("count " + replayFilter.getReplayCount() + " put " + put + " filter " + filter);
     LOGGER.debug(skipsFilter.toString());
     return new NullFuture();
   }
@@ -165,6 +152,7 @@ public class RecoveryManagerImpl implements RecoveryManager {
     private final AtomicReference<Throwable> firstError      = new AtomicReference<>();
     private final ForkJoinPool replayPool;
 
+    private final RecoveryListener listener;
     private final File dbHome;
     private final int replayPerBatchSize;
     private final int replayTotalBatchSize;
@@ -174,7 +162,8 @@ public class RecoveryManagerImpl implements RecoveryManager {
     private int[] currentIndices;
     private ForkJoinTask<Void> replayBatchTask;
 
-    ReplayFilter(int replayPerBatchSize, int replayTotalBatchSize, File dbHome, int maxThreadCount) {
+    ReplayFilter(RecoveryListener listener, int replayPerBatchSize, int replayTotalBatchSize, File dbHome, int maxThreadCount) {
+      this.listener = listener;
       this.dbHome = dbHome;
       this.replayPerBatchSize = replayPerBatchSize;
       this.replayTotalBatchSize = replayTotalBatchSize;
@@ -206,17 +195,6 @@ public class RecoveryManagerImpl implements RecoveryManager {
         this.currentIndices[idx1] = nextIdx2;
         submitted++;
         batches[idx1][idx2] = new ReplayElement(element,lsn);
-        if (element instanceof EncryptedAction && !isPartialEnc) {
-          EncryptedAction action = (EncryptedAction) element;
-          if (latestEncToken == null) {
-            latestEncToken = action.getToken();
-          } else {
-            if (!latestEncToken.equals(action.getToken())) {
-              isPartialEnc = true;
-              maxLsnTillReEnc = lsn+1;
-            }
-          }
-        }
         if (submitted - replayed  >= replayTotalBatchSize || nextIdx2 >= replayPerBatchSize - 1) {
           submitJob(false);
         }
@@ -291,14 +269,14 @@ public class RecoveryManagerImpl implements RecoveryManager {
       });
     }
 
-    void checkError() throws RecoveryException {
+    public void checkError() throws RecoveryException {
       Throwable t = firstError.get();
       if (t != null) {
         throw new RecoveryException("Caught an error recovering from log at " + dbHome.getAbsolutePath(), t);
       }
     }
 
-    void finish() throws InterruptedException {
+    public void finish() throws InterruptedException {
       submitJob(true);
       replayPool.shutdown();
       boolean done;
@@ -309,6 +287,9 @@ public class RecoveryManagerImpl implements RecoveryManager {
           LOGGER.warn("Cannot proceed further. Checking Again for recovery completion...");
         }
       } while (!done);
+
+      listener.recovered();
+      LOGGER.debug("count " + getReplayCount());
     }
   }
 

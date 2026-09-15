@@ -16,6 +16,7 @@
 package com.terracottatech.frs;
 
 import com.terracottatech.frs.action.NullAction;
+import com.terracottatech.frs.cipher.EncryptionInRecoveryListener;
 import com.terracottatech.frs.cipher.EncryptionManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +67,7 @@ import java.util.function.Consumer;
 /**
  * @author twu
  */
-public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, ByteBuffer>, RecoveryListener {
+public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, ByteBuffer>, RecoveryListener, EncryptionInRecoveryListener {
   private static final Logger LOGGER = LoggerFactory.getLogger(RestartStoreImpl.class);
 
   private enum State {
@@ -149,11 +150,11 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
     state = State.RECOVERING;
     RecoveryManager recoveryManager = new RecoveryManagerImpl(logManager, actionManager,
                                                               configuration);
-    return recoveryManager.recover(this);
+    return recoveryManager.recover(this, this);
   }
 
   @Override
-  public synchronized void recovered(String latestEncToken, boolean partialWriteWithNewKey, long maxLsn) throws InterruptedException {
+  public synchronized void recovered() throws InterruptedException {
     while (state == State.FROZEN) {
       LOGGER.warn("FRS Store is frozen. Waiting for a shutdown or resume");
       this.wait();
@@ -162,7 +163,10 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
       compactor.startup();
       state = State.RUNNING;
     }
-
+  }
+  
+  @Override
+  public synchronized void initiateEncryption(String latestEncToken, boolean partialWriteWithNewKey, long maxLsn) {
     if (partialWriteWithNewKey) {
       LOGGER.info("records from mixed tokens found in log records");
       initiateRewrite(maxLsn);

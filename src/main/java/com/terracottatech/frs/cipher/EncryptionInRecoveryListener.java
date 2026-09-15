@@ -13,21 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.terracottatech.frs.recovery;
+package com.terracottatech.frs.cipher;
 
-/**
- * @author tim
- */
-public abstract class AbstractAdaptingFilter<T, U> implements Filter<T> {
-  private final Filter<U> nextFilter;
-
-  protected AbstractAdaptingFilter(Filter<U> nextFilter) {
-    this.nextFilter = nextFilter;
-  }
-
-  protected boolean delegate(T element, long lsn, boolean filtered) {
-    return nextFilter.filter(convert(element), lsn, filtered);
-  }
-
-  protected abstract U convert(T element);
+public interface EncryptionInRecoveryListener {
+  void initiateEncryption(String latestEncToken, boolean partialWriteWithNewKey, long maxLsn);
 }
