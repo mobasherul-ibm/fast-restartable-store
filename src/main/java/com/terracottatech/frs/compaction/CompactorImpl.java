@@ -296,7 +296,7 @@ public class CompactorImpl implements Compactor {
   @Override
   public synchronized void pause() {
     pauseCount++;
-    if(!paused) {
+    if (!paused) {
       compactNow();
       boolean interrupted = false;
       while (!paused) {
@@ -314,8 +314,10 @@ public class CompactorImpl implements Compactor {
 
   @Override
   public synchronized void unpause() {
-    pauseCount--;
-    if(pauseCount == 0) {
+    if (pauseCount > 0) {
+      pauseCount--;
+    }
+    if (pauseCount == 0) {
       paused = false;
       notifyAll();
     }
