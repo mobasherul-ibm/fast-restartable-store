@@ -36,7 +36,7 @@ import java.io.IOException;
 /**
  * @author tim
  */
-public class TransactionalAction implements TransactionAction, GettableAction {
+class TransactionalAction implements TransactionAction, GettableAction {
   public static final ActionFactory<ByteBuffer, ByteBuffer, ByteBuffer> FACTORY =
           new ActionFactory<ByteBuffer, ByteBuffer, ByteBuffer>() {
             @Override
@@ -62,7 +62,7 @@ public class TransactionalAction implements TransactionAction, GettableAction {
     this.callback = null;
   }
   
-  public TransactionalAction(TransactionHandle handle, boolean begin, boolean commit, Action action, TransactionLSNCallback callback) {
+  TransactionalAction(TransactionHandle handle, boolean begin, boolean commit, Action action, TransactionLSNCallback callback) {
     this.handle = handle;
     this.action = action;
     byte tempMode = 0;

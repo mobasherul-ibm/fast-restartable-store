@@ -71,7 +71,7 @@ public interface ActionManager {
    * @return the future that completes when the action is flushed to disk.
    */
   Future<Void> syncHappenedAndPause(Action action) throws InterruptedException;
-  
+
   /**
    * Resume action manager.
    * <p>

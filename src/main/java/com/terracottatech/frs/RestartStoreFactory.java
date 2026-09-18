@@ -84,9 +84,9 @@ public abstract class RestartStoreFactory {
     LogManager logManager = new StagingLogManager(ioManager,writingSource,configuration);
     ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec = createCodec(objectManager);
     EncryptionManager encryptionManager = new EncryptionManagerImpl(configuration, codec);
-    ActionManager actionManager = new ActionManagerImpl(logManager, objectManager, encryptionManager, codec,
-        new MasterLogRecordFactory());
-    TransactionManager transactionManager = new TransactionManagerImpl(actionManager, encryptionManager);
+    ActionManager actionManager = new ActionManagerImpl(logManager, objectManager,
+            encryptionManager, new MasterLogRecordFactory());
+    TransactionManager transactionManager = new TransactionManagerImpl(actionManager);
     return new RestartStoreImpl(objectManager, transactionManager, logManager,
         actionManager, encryptionManager, readManager, ioManager, configuration);
   }

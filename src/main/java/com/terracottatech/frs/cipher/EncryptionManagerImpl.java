@@ -17,9 +17,11 @@ package com.terracottatech.frs.cipher;
 
 import com.terracottatech.frs.action.Action;
 import com.terracottatech.frs.action.ActionCodec;
+import com.terracottatech.frs.action.ActionFactory;
 import com.terracottatech.frs.config.Configuration;
 import com.terracottatech.frs.config.FrsProperty;
 
+import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -28,16 +30,14 @@ import java.util.Map;
 public class EncryptionManagerImpl implements EncryptionManager {
 
   public static final String TOKEN_KEY_DELIMITER = ":";
-  public static final String MULTIPLE_TOKEN_KEY_DELIMETER = ",";
+  public static final String MULTIPLE_TOKEN_KEY_DELIMITER = ",";
   
-  private final ActionCodec actionCodec;
-  private final Configuration configuration;
+  private final ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec;
 
   private volatile EncryptionHandler cipherKeyHandler;
   private volatile boolean encryptEnabled = false;
 
-  public EncryptionManagerImpl(Configuration configuration, ActionCodec actionCodec) {
-    this.configuration = configuration;
+  public EncryptionManagerImpl(Configuration configuration, ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec) {
     this.actionCodec = actionCodec;
     boolean encrypted = configuration.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE);
     if (encrypted) {
@@ -46,9 +46,9 @@ public class EncryptionManagerImpl implements EncryptionManager {
       Map<String, byte[]> tokenToKeyMap = new HashMap<>();
       
       if(oldTokenAndKeys != null) {
-        String[] oldTokensSplit = oldTokenAndKeys.split(MULTIPLE_TOKEN_KEY_DELIMETER);
-        for (int i = 0; i < oldTokensSplit.length; ++i) {
-          String[] oldTokenAndKey = oldTokensSplit[i].split(TOKEN_KEY_DELIMITER);
+        String[] oldTokensSplit = oldTokenAndKeys.split(MULTIPLE_TOKEN_KEY_DELIMITER);
+        for (String s : oldTokensSplit) {
+          String[] oldTokenAndKey = s.split(TOKEN_KEY_DELIMITER);
           String oldToken = oldTokenAndKey[0];
           byte[] oldKey = Base64.getDecoder().decode(oldTokenAndKey[1]);
           tokenToKeyMap.put(oldToken, oldKey);
@@ -94,12 +94,31 @@ public class EncryptionManagerImpl implements EncryptionManager {
   }
 
   @Override
+  public Action decode(ByteBuffer[] buffer) {
+    return unwrap(actionCodec.decode(buffer));
+  }
+
+  @Override
+  public ByteBuffer[] encode(Action action) {
+    return actionCodec.encode(wrap(action));
+  }
+
+  @Override
   public void remove(List<String> tokens) {
     cipherKeyHandler.remove(tokens);
   }
 
   @Override
-  public Action convert(Action action) {
+  public void registerAction(int collectionId, int actionId, Class<? extends Action> actionClass, ActionFactory<ByteBuffer, ByteBuffer, ByteBuffer> actionFactory) {
+    actionCodec.registerAction(collectionId, actionId, actionClass, actionFactory);
+  }
+
+  private Action wrap(Action action) {
     return cipherKeyHandler.convert(action);
   }
+
+  private Action unwrap(Action action) {
+    return action;
+  }
+
 }

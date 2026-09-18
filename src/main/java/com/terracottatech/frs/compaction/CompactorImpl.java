@@ -329,9 +329,7 @@ public class CompactorImpl implements Compactor {
       pause();
       try {
         rewrite(lsn);
-      } catch (ExecutionException e) {
-        throw new RuntimeException(e);
-      } catch (InterruptedException e) {
+      } catch (ExecutionException | InterruptedException e) {
         throw new RuntimeException(e);
       } finally {
         unpause();

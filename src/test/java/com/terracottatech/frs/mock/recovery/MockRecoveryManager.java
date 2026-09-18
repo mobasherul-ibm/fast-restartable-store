@@ -21,6 +21,7 @@ import com.terracottatech.frs.mock.MockDeleteFilter;
 import com.terracottatech.frs.mock.transaction.MockTransactionFilter;
 import com.terracottatech.frs.recovery.Filter;
 import com.terracottatech.frs.log.LogManager;
+import com.terracottatech.frs.recovery.RecoveryException;
 import com.terracottatech.frs.recovery.RecoveryListener;
 import com.terracottatech.frs.recovery.RecoveryManager;
 import com.terracottatech.frs.action.Action;
@@ -45,11 +46,11 @@ public class MockRecoveryManager implements RecoveryManager {
   }
 
   @Override
-  public Future<Void> recover(RecoveryListener listener, EncryptionInRecoveryListener encryptionInRecoveryListener) {
+  public Future<Void> recover(RecoveryListener listener, EncryptionInRecoveryListener encryptionInRecoveryListener) throws RecoveryException {
     Iterator<LogRecord> it = logManager.startup();
 
     Filter<Action> replay = new MockReplayFilter();
-    Filter<Action> deleteFilter = new MockDeleteFilter(replay);
+    Filter<Action> deleteFilter = new MockDeleteFilter<>(replay);
     Filter<Action> transactionFilter = new MockTransactionFilter(deleteFilter);
     
     Filter<Action> skipsFilter = new MockSkipsFilter(transactionFilter);

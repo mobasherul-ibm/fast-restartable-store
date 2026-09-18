@@ -32,7 +32,7 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 
-import static com.terracottatech.frs.cipher.EncryptionManagerImpl.MULTIPLE_TOKEN_KEY_DELIMETER;
+import static com.terracottatech.frs.cipher.EncryptionManagerImpl.MULTIPLE_TOKEN_KEY_DELIMITER;
 import static com.terracottatech.frs.cipher.EncryptionManagerImpl.TOKEN_KEY_DELIMITER;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -315,7 +315,7 @@ public class RestartStoreEncryptionKeyRotateTest {
       newKey = CipherHelper.generateNewKey();
       restartStore.handleEncKeyChange("token2", newKey);
       Thread.sleep(100);
-      oldTokenAndKey = oldTokenAndKey.concat(MULTIPLE_TOKEN_KEY_DELIMETER + "token2" + TOKEN_KEY_DELIMITER + newKey);
+      oldTokenAndKey = oldTokenAndKey.concat(MULTIPLE_TOKEN_KEY_DELIMITER + "token2" + TOKEN_KEY_DELIMITER + newKey);
       restartStore.shutdown();
     }
 

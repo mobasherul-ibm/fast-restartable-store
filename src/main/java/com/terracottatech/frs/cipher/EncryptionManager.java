@@ -15,13 +15,13 @@
  */
 package com.terracottatech.frs.cipher;
 
-import com.terracottatech.frs.action.Action;
+import com.terracottatech.frs.action.ActionCodec;
 
+import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Optional;
 
-public interface EncryptionManager {
-  
+public interface EncryptionManager extends ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> {
+
   String getCurrToken();
   /**
    * Gets the token identifying the previously used encryption key, if any.
@@ -52,6 +52,4 @@ public interface EncryptionManager {
    * @param tokens list of tokens identifying the encryption key to remove
    */
   void remove(List<String> tokens);
-  
-  Action convert(Action action);
 }

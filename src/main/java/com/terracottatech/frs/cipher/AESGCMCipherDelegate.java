@@ -82,7 +82,7 @@ public class AESGCMCipherDelegate implements CipherAlgorithmDelegate {
     }
 
     int totalOutputSize = cipher.getOutputSize(totalInputSize); // includes GCM tag
-    boolean useDirect = input.length == 0 ? false : input[0].isDirect();
+    boolean useDirect = input.length != 0 && input[0].isDirect();
     ByteBuffer cipherBuffer = useDirect ? ByteBuffer.allocateDirect(totalOutputSize) :
         ByteBuffer.allocate(totalOutputSize);
 

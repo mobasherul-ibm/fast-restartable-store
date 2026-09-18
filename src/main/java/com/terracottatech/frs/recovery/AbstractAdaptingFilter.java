@@ -13,35 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.terracottatech.frs.mock.recovery;
-
-import com.terracottatech.frs.recovery.Filter;
+package com.terracottatech.frs.recovery;
 
 /**
- *
- * @author cdennis
+ * @author tim
  */
-public abstract class MockAbstractFilter<T, U> implements Filter<T> {
-  
-  private final Filter<U> next;
-  
-  public MockAbstractFilter(Filter<U> next) {
-    this.next = next;
+public abstract class AbstractAdaptingFilter<T, U> implements Filter<T> {
+  private final Filter<U> nextFilter;
+
+  protected AbstractAdaptingFilter(Filter<U> nextFilter) {
+    this.nextFilter = nextFilter;
   }
 
-  protected final boolean delegate(T element, long lsn, boolean filtered) {
-    return next.filter(convert(element), lsn, filtered);
+  protected boolean delegate(T element, long lsn, boolean filtered) throws RecoveryException {
+    return nextFilter.filter(convert(element), lsn, filtered);
   }
-  
+
+  @Override
+  public void finish() throws RecoveryException {
+    nextFilter.finish();
+  }
+
   protected abstract U convert(T element);
-  
-  @Override
-  public void finish() {
-    
-  } 
-  
-  @Override
-  public void checkError() {
-    
-  }
 }

@@ -34,14 +34,14 @@ public class LazyDecryptingGettableAction implements GettableAction, EncryptedAc
   private final long invalidatedLsn;
   private final String token;
   private final ByteBuffer[] buffers;
-  private final ActionCodec codec;
+  private final ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec;
   
   private Closeable disposable;
   private volatile GettableAction action;
 
   public LazyDecryptingGettableAction(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager,
                                       CipherManager cipherManager, long invalidatedLsn, ByteBuffer identifier,
-                                      String token, ByteBuffer[] buffers, ActionCodec codec) {
+                                      String token, ByteBuffer[] buffers, ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec) {
     this.objectManager = objectManager;
     this.cipherManager = cipherManager;
     this.invalidatedLsn = invalidatedLsn;
