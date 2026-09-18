@@ -154,10 +154,14 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
   }
 
   @Override
-  public synchronized void recovered() throws InterruptedException {
+  public synchronized void recovered() {
     while (state == State.FROZEN) {
       LOGGER.warn("FRS Store is frozen. Waiting for a shutdown or resume");
-      this.wait();
+      try {
+        this.wait();
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
     }
     if (state == State.RECOVERING) {
       compactor.startup();

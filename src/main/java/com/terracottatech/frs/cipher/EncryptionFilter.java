@@ -18,6 +18,7 @@ package com.terracottatech.frs.cipher;
 import com.terracottatech.frs.action.Action;
 import com.terracottatech.frs.recovery.AbstractFilter;
 import com.terracottatech.frs.recovery.Filter;
+import com.terracottatech.frs.recovery.RecoveryException;
 
 public class EncryptionFilter extends AbstractFilter<Action> {
   private final EncryptionInRecoveryListener listener;
@@ -31,7 +32,7 @@ public class EncryptionFilter extends AbstractFilter<Action> {
   }
 
   @Override
-  public boolean filter(Action element, long lsn, boolean filtered) {
+  public boolean filter(Action element, long lsn, boolean filtered) throws RecoveryException {
     if (element instanceof EncryptedAction && !isPartialEnc) {
       EncryptedAction action = (EncryptedAction) element;
       if (latestEncToken == null) {
@@ -47,7 +48,7 @@ public class EncryptionFilter extends AbstractFilter<Action> {
   }
 
   @Override
-  public void finish() throws InterruptedException {
+  public void finish() throws RecoveryException {
     super.finish();
     listener.initiateEncryption(latestEncToken, isPartialEnc, maxLsnTillReEnc);
   }

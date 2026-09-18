@@ -18,6 +18,7 @@ package com.terracottatech.frs.cipher;
 import com.terracottatech.frs.action.Action;
 import com.terracottatech.frs.action.ActionCodec;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +27,7 @@ public class DefaultEncryptionHandler implements EncryptionHandler {
   private final CipherManager cipherManager;
   private final EncryptionActionConverter converter;
   
-  public DefaultEncryptionHandler(ActionCodec codec, Map<String, byte[]> tokenToKeyMap, String currentToken) {
+  public DefaultEncryptionHandler(ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec, Map<String, byte[]> tokenToKeyMap, String currentToken) {
     cipherManager = new AESCipherManager(tokenToKeyMap, currentToken);
     this.converter = new EncryptionActionConverter(cipherManager);
     EncryptionActions.registerActions(3, codec, cipherManager);

@@ -87,6 +87,7 @@ public class EncryptedGettableAction implements Action {
     ByteBuffer[] delegatePayload = codec.encode(delegate);
 
     ByteBuffer identifier = delegate.getIdentifier();
+    //you cannot assume there is only one invalidated lsn
     long invalidatedLsn = delegate.getInvalidatedLsns().stream().findFirst().get();
     byte[] ctoken = cipherManager.getCurrentToken().getBytes(StandardCharsets.UTF_8);
     int size = identifier.remaining() + 16 + ctoken.length; // 16 for invalidatedLsn + len(ctoken)
