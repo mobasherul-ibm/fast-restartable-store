@@ -15,14 +15,12 @@
  */
 package com.terracottatech.frs.cipher;
 
-import com.terracottatech.frs.action.Action;
-
 import java.util.List;
 
 public interface EncryptionHandler {
 
   String getCurrToken();
-  
+
   List<String> getPreviousTokens();
 
   boolean isUsingEncKey(String token);
@@ -30,6 +28,4 @@ public interface EncryptionHandler {
   void add(String token, byte[] key);
 
   void remove(List<String> tokens);
-
-  Action convert(Action action);
 }

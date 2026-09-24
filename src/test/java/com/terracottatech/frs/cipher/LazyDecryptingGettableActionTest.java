@@ -15,8 +15,6 @@
  */
 package com.terracottatech.frs.cipher;
 
-import com.terracottatech.frs.GettableAction;
-import com.terracottatech.frs.action.ActionCodec;
 import com.terracottatech.frs.object.ObjectManager;
 
 import org.junit.Before;
@@ -49,21 +47,19 @@ public class LazyDecryptingGettableActionTest {
 
   private ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager;
   private CipherManager cipherManager;
-  private ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec;
   private ByteBuffer identifier;
   private ByteBuffer[] encryptedBuffers;
-  private GettableAction decryptedAction;
 
   // Pre-built encrypted payload bytes (iv=4 bytes, payload=5 bytes)
   private static final byte[] IV_BYTES = {1, 2, 3, 4};
   private static final byte[] PAYLOAD_BYTES = {10, 20, 30, 40, 50};
+  private static final byte[] KEY_BYTES = "key-data".getBytes(StandardCharsets.UTF_8);
+  private static final byte[] VALUE_BYTES = "value-data".getBytes(StandardCharsets.UTF_8);
 
   @Before
   public void setUp() {
     objectManager = mock(ObjectManager.class);
     cipherManager = mock(CipherManager.class);
-    codec = mock(ActionCodec.class);
-    decryptedAction = mock(GettableAction.class);
 
     identifier = ByteBuffer.wrap("my-identifier".getBytes(StandardCharsets.UTF_8));
 
@@ -78,18 +74,24 @@ public class LazyDecryptingGettableActionTest {
     encryptedBuffers = new ByteBuffer[]{buf};
 
     when(cipherManager.decrypt(any(ByteBuffer.class), any(ByteBuffer.class), eq(TOKEN)))
-        .thenReturn(mock(ByteBuffer.class));
-    when(codec.decode(any(ByteBuffer[].class))).thenReturn(decryptedAction);
+        .thenAnswer(invocation -> createDecryptedPayloadBuffer());
+  }
+
+  private ByteBuffer createDecryptedPayloadBuffer() {
+    // [keyLength (4 bytes), valueLength (4 bytes), key bytes, value bytes]
+    ByteBuffer decryptedPayloadBuf = ByteBuffer.allocate(4 + 4 + KEY_BYTES.length + VALUE_BYTES.length);
+    decryptedPayloadBuf.putInt(KEY_BYTES.length);
+    decryptedPayloadBuf.putInt(VALUE_BYTES.length);
+    decryptedPayloadBuf.put(KEY_BYTES);
+    decryptedPayloadBuf.put(VALUE_BYTES);
+    decryptedPayloadBuf.flip();
+    return decryptedPayloadBuf;
   }
 
   private LazyDecryptingGettableAction createAction() {
     return new LazyDecryptingGettableAction(objectManager, cipherManager, INVALIDATED_LSN,
-        identifier, TOKEN, encryptedBuffers, codec);
+        identifier, TOKEN, encryptedBuffers);
   }
-
-  // -----------------------------------------------------------------------
-  // Constructor / basic state
-  // -----------------------------------------------------------------------
 
   @Test
   public void testGetIdentifierReturnsConstructorValue() {
@@ -117,11 +119,6 @@ public class LazyDecryptingGettableActionTest {
     createAction().getLsn();
   }
 
-  @Test(expected = UnsupportedOperationException.class)
-  public void testGetPayloadThrows() {
-    createAction().getPayload(codec);
-  }
-
   @Test
   public void testRecordIsNoOp() {
     // Should not throw and should not interact with any dependency
@@ -133,34 +130,28 @@ public class LazyDecryptingGettableActionTest {
 
   @Test
   public void testGetKeyTriggersDecryptionOnFirstCall() {
-    ByteBuffer expectedKey = ByteBuffer.wrap("key-data".getBytes());
-    when(decryptedAction.getKey()).thenReturn(expectedKey);
+    ByteBuffer expectedKey = ByteBuffer.wrap(KEY_BYTES);
 
     LazyDecryptingGettableAction action = createAction();
     ByteBuffer result = action.getKey();
 
-    assertSame(expectedKey, result);
+    assertEquals(expectedKey, result);
     verify(cipherManager, times(1)).decrypt(any(ByteBuffer.class), any(ByteBuffer.class), eq(TOKEN));
-    verify(codec, times(1)).decode(any(ByteBuffer[].class));
   }
 
   @Test
   public void testGetValueTriggersDecryptionOnFirstCall() {
-    ByteBuffer expectedValue = ByteBuffer.wrap("value-data".getBytes());
-    when(decryptedAction.getValue()).thenReturn(expectedValue);
+    ByteBuffer expectedValue = ByteBuffer.wrap(VALUE_BYTES);
 
     LazyDecryptingGettableAction action = createAction();
     ByteBuffer result = action.getValue();
 
-    assertSame(expectedValue, result);
+    assertEquals(expectedValue, result);
     verify(cipherManager, times(1)).decrypt(any(ByteBuffer.class), any(ByteBuffer.class), eq(TOKEN));
-    verify(codec, times(1)).decode(any(ByteBuffer[].class));
   }
 
   @Test
   public void testGetKeyDoesNotDecryptTwiceOnSubsequentCalls() {
-    when(decryptedAction.getKey()).thenReturn(ByteBuffer.wrap(new byte[0]));
-
     LazyDecryptingGettableAction action = createAction();
     action.getKey();
     action.getKey();
@@ -171,8 +162,6 @@ public class LazyDecryptingGettableActionTest {
 
   @Test
   public void testGetValueDoesNotDecryptTwiceOnSubsequentCalls() {
-    when(decryptedAction.getValue()).thenReturn(ByteBuffer.wrap(new byte[0]));
-
     LazyDecryptingGettableAction action = createAction();
     action.getValue();
     action.getValue();
@@ -182,9 +171,6 @@ public class LazyDecryptingGettableActionTest {
 
   @Test
   public void testGetKeyAndGetValueShareSingleDecryption() {
-    when(decryptedAction.getKey()).thenReturn(ByteBuffer.wrap(new byte[0]));
-    when(decryptedAction.getValue()).thenReturn(ByteBuffer.wrap(new byte[0]));
-
     LazyDecryptingGettableAction action = createAction();
     action.getKey();    // triggers decrypt
     action.getValue();  // reuses cached action
@@ -205,10 +191,8 @@ public class LazyDecryptingGettableActionTest {
 
   @Test
   public void testReplayDecryptsAndCallsObjectManagerReplayPut() {
-    ByteBuffer expectedKey = ByteBuffer.wrap("key".getBytes());
-    ByteBuffer expectedValue = ByteBuffer.wrap("value".getBytes());
-    when(decryptedAction.getKey()).thenReturn(expectedKey);
-    when(decryptedAction.getValue()).thenReturn(expectedValue);
+    ByteBuffer expectedKey = ByteBuffer.wrap(KEY_BYTES);
+    ByteBuffer expectedValue = ByteBuffer.wrap(VALUE_BYTES);
 
     long replayLsn = 177L;
     LazyDecryptingGettableAction action = createAction();
@@ -217,7 +201,6 @@ public class LazyDecryptingGettableActionTest {
     verify(cipherManager, times(1)).decrypt(any(ByteBuffer.class), any(ByteBuffer.class), eq(TOKEN));
     verify(objectManager).replayPut(eq(identifier), eq(expectedKey), eq(expectedValue), eq(replayLsn));
   }
-
   @Test
   public void testSetDisposableAndClose() throws IOException {
     Closeable disposable = mock(Closeable.class);

@@ -22,9 +22,11 @@ import java.nio.ByteBuffer;
  */
 public interface ActionCodec<I, K, V> {
 
-  void registerAction(int collectionId, int actionId, Class<? extends Action> actionClass,
-                      ActionFactory<I, K, V> actionFactory);
+  <T extends Action> void registerAction(int collectionId, int actionId, Class<? extends Action> actionClass,
+                      ActionHandler<I,K,V,T> actionHandler);
 
+  <T extends Action> void updateHandler(Class<? extends Action> actionClass, ActionHandler<I,K,V,T> actionHandler);
+  
   Action decode(ByteBuffer[] buffer);
 
   ByteBuffer[] encode(Action action);

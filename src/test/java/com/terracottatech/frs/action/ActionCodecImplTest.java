@@ -62,8 +62,8 @@ public class ActionCodecImplTest {
   }
 
   private static class BogusAction implements Action {
-    static final ActionFactory<ByteBuffer, ByteBuffer, ByteBuffer> FACTORY =
-            mock(ActionFactory.class);
+    static final ActionHandler<ByteBuffer, ByteBuffer, ByteBuffer, Action> FACTORY =
+            mock(ActionHandler.class);
 
     @Override
     public void record(long lsn) {
@@ -71,11 +71,6 @@ public class ActionCodecImplTest {
 
     @Override
     public void replay(long lsn) {
-    }
-
-    @Override
-    public ByteBuffer[] getPayload(ActionCodec codec) {
-      return new ByteBuffer[0];
     }
   }
 

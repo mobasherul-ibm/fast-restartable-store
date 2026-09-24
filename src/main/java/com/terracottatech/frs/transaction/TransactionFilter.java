@@ -18,6 +18,7 @@ package com.terracottatech.frs.transaction;
 import com.terracottatech.frs.action.Action;
 import com.terracottatech.frs.recovery.AbstractFilter;
 import com.terracottatech.frs.recovery.Filter;
+import com.terracottatech.frs.recovery.RecoveryException;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -34,7 +35,7 @@ public class TransactionFilter extends AbstractFilter<Action> {
   }
 
   @Override
-  public boolean filter(Action element, long lsn, boolean filtered) {
+  public boolean filter(Action element, long lsn, boolean filtered) throws RecoveryException {
     if (element instanceof  TransactionAction) {
       TransactionAction transactionAction = (TransactionAction) element;
       boolean replayed = true;

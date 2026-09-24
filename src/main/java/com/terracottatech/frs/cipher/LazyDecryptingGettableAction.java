@@ -16,7 +16,7 @@
 package com.terracottatech.frs.cipher;
 
 import com.terracottatech.frs.GettableAction;
-import com.terracottatech.frs.action.ActionCodec;
+import com.terracottatech.frs.PutAction;
 import com.terracottatech.frs.object.ObjectManager;
 import com.terracottatech.frs.util.ByteBufferUtils;
 
@@ -34,21 +34,19 @@ public class LazyDecryptingGettableAction implements GettableAction, EncryptedAc
   private final long invalidatedLsn;
   private final String token;
   private final ByteBuffer[] buffers;
-  private final ActionCodec codec;
   
   private Closeable disposable;
   private volatile GettableAction action;
 
   public LazyDecryptingGettableAction(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager,
                                       CipherManager cipherManager, long invalidatedLsn, ByteBuffer identifier,
-                                      String token, ByteBuffer[] buffers, ActionCodec codec) {
+                                      String token, ByteBuffer[] buffers) {
     this.objectManager = objectManager;
     this.cipherManager = cipherManager;
     this.invalidatedLsn = invalidatedLsn;
     this.token = token;
     this.identifier = identifier;
     this.buffers = buffers;
-    this.codec = codec;
   }
 
   @Override
@@ -108,11 +106,6 @@ public class LazyDecryptingGettableAction implements GettableAction, EncryptedAc
   }
 
   @Override
-  public ByteBuffer[] getPayload(ActionCodec codec) {
-    throw new UnsupportedOperationException("action cannot be serialized");
-  }
-
-  @Override
   public void close() throws IOException {
     if (disposable != null) {
       disposable.close();
@@ -131,7 +124,12 @@ public class LazyDecryptingGettableAction implements GettableAction, EncryptedAc
     ByteBuffer initializationVector = ByteBufferUtils.getBytes(ivLength, buffers);
     ByteBuffer encryptedPayload = ByteBufferUtils.getBytes(payloadLength, buffers);
 
-    ByteBuffer payload = cipherManager.decrypt(encryptedPayload, initializationVector, token);
-    return (GettableAction) codec.decode(new ByteBuffer[]{payload});
+    ByteBuffer[] payload = new ByteBuffer[] {cipherManager.decrypt(encryptedPayload, initializationVector, token)};
+
+    int keyLength = ByteBufferUtils.getInt(payload);
+    int valueLength = ByteBufferUtils.getInt(payload);
+    ByteBuffer key = ByteBufferUtils.getBytes(keyLength, payload);
+    ByteBuffer value = ByteBufferUtils.getBytes(valueLength, payload);
+    return new PutAction(objectManager, null, identifier, key, value, invalidatedLsn);
   }
 }

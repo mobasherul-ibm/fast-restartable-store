@@ -309,7 +309,7 @@ public class RestartStoreImplTest {
 
   /**
    * handleEncKeyChange() must call {@link Compactor#compactTillLsn} with exactly the LSN
-   * that was recorded on the {@link NullAction} barrier by {@link ActionManager#pause(Action)}.
+   * that was recorded on the {@link NullAction} barrier by {@link ActionManager#syncHappenedAndPause(Action)}.
    * This ensures re-encryption covers all records written before the key change.
    */
   @Test

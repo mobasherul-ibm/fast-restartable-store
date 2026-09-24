@@ -20,6 +20,7 @@ import com.terracottatech.frs.action.ActionCodec;
 import com.terracottatech.frs.config.Configuration;
 import com.terracottatech.frs.config.FrsProperty;
 
+import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -28,15 +29,16 @@ import java.util.Map;
 public class EncryptionManagerImpl implements EncryptionManager {
 
   public static final String TOKEN_KEY_DELIMITER = ":";
-  public static final String MULTIPLE_TOKEN_KEY_DELIMETER = ",";
+  public static final String MULTIPLE_TOKEN_KEY_DELIMITER = ",";
   
-  private final ActionCodec actionCodec;
+  private final ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec;
   private final Configuration configuration;
 
   private volatile EncryptionHandler cipherKeyHandler;
   private volatile boolean encryptEnabled = false;
 
-  public EncryptionManagerImpl(Configuration configuration, ActionCodec actionCodec) {
+  public EncryptionManagerImpl(Configuration configuration, 
+                               ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec) {
     this.configuration = configuration;
     this.actionCodec = actionCodec;
     boolean encrypted = configuration.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE);
@@ -46,9 +48,9 @@ public class EncryptionManagerImpl implements EncryptionManager {
       Map<String, byte[]> tokenToKeyMap = new HashMap<>();
       
       if(oldTokenAndKeys != null) {
-        String[] oldTokensSplit = oldTokenAndKeys.split(MULTIPLE_TOKEN_KEY_DELIMETER);
-        for (int i = 0; i < oldTokensSplit.length; ++i) {
-          String[] oldTokenAndKey = oldTokensSplit[i].split(TOKEN_KEY_DELIMITER);
+        String[] oldTokensSplit = oldTokenAndKeys.split(MULTIPLE_TOKEN_KEY_DELIMITER);
+        for (String s : oldTokensSplit) {
+          String[] oldTokenAndKey = s.split(TOKEN_KEY_DELIMITER);
           String oldToken = oldTokenAndKey[0];
           byte[] oldKey = Base64.getDecoder().decode(oldTokenAndKey[1]);
           tokenToKeyMap.put(oldToken, oldKey);
@@ -96,10 +98,5 @@ public class EncryptionManagerImpl implements EncryptionManager {
   @Override
   public void remove(List<String> tokens) {
     cipherKeyHandler.remove(tokens);
-  }
-
-  @Override
-  public Action convert(Action action) {
-    return cipherKeyHandler.convert(action);
   }
 }

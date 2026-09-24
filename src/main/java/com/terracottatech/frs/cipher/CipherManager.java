@@ -16,15 +16,7 @@
 package com.terracottatech.frs.cipher;
 
 import java.nio.ByteBuffer;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
-import java.util.Optional;
-
-import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Interface for managing encryption and decryption operations in the Fast Restartable Store.

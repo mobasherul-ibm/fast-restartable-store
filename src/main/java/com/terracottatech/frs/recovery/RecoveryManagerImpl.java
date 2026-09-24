@@ -49,7 +49,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
  * @author tim
  */
 public class RecoveryManagerImpl implements RecoveryManager {
-  private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryManager.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryManagerImpl.class);
 
   private final LogManager logManager;
   private final ActionManager actionManager;
@@ -97,7 +97,6 @@ public class RecoveryManagerImpl implements RecoveryManager {
         LogRecord logRecord = i.next();
         Action action = actionManager.extract(logRecord);
         boolean replayed = progressLoggingFilter.filter(action, logRecord.getLsn(), false);
-        progressLoggingFilter.checkError();
         lastRecoveredLsn = logRecord.getLsn();
         if ( action instanceof Disposable ) {
           if ( !replayed ) {
@@ -111,7 +110,6 @@ public class RecoveryManagerImpl implements RecoveryManager {
       throw new RecoveryException("failed to restart", ioe);
     } finally {
       progressLoggingFilter.finish();
-      progressLoggingFilter.checkError();
     }
 
     if (lastRecoveredLsn != Long.MAX_VALUE && lastRecoveredLsn > logManager.lowestLsn()) {
@@ -129,14 +127,14 @@ public class RecoveryManagerImpl implements RecoveryManager {
 
     ProgressLoggingFilter(File home, Filter<Action> delegate, long lowestLsn) {
       super(delegate);
-      LOGGER.info("Starting recovery for " + home.getAbsolutePath());
+      LOGGER.info("Starting recovery for {}", home.getAbsolutePath());
       this.lowestLsn = lowestLsn;
     }
 
     @Override
-    public boolean filter(Action element, long lsn, boolean filtered) {
+    public boolean filter(Action element, long lsn, boolean filtered) throws RecoveryException {
       if (count-- <= 0 && position > 0) {
-        LOGGER.info("Recovery progress " + (10 - position)*10 + "%");
+        LOGGER.info("Recovery progress {}%", (10 - position) * 10);
         count = (lsn - lowestLsn)/position--;
       }
 
@@ -147,7 +145,7 @@ public class RecoveryManagerImpl implements RecoveryManager {
     }
   }
 
-  private class ReplayFilter implements Filter<Action> {
+  private static class ReplayFilter implements Filter<Action> {
     private final AtomicInteger              threadId        = new AtomicInteger();
     private final AtomicReference<Throwable> firstError      = new AtomicReference<>();
     private final ForkJoinPool replayPool;
@@ -185,7 +183,9 @@ public class RecoveryManagerImpl implements RecoveryManager {
     }
 
     @Override
-    public boolean filter(final Action element, final long lsn, boolean filtered) {
+    public boolean filter(final Action element, final long lsn, boolean filtered) throws RecoveryException {
+      checkError();
+
       if (filtered) {
         return false;
       } else {
@@ -233,7 +233,7 @@ public class RecoveryManagerImpl implements RecoveryManager {
             replayBatchTask.get();
           } catch (ExecutionException e) {
             firstError.compareAndSet(null, e);
-            LOGGER.error("Error replaying record: " + e.getMessage());
+            LOGGER.error("Error replaying record: {}", e.getMessage());
           } catch (InterruptedException e) {
             interrupted |= Thread.interrupted();
           } finally {
@@ -262,34 +262,39 @@ public class RecoveryManagerImpl implements RecoveryManager {
             }
           } catch (Throwable t) {
             firstError.compareAndSet(null, t);
-            LOGGER.error("Error replaying record: " + t.getMessage());
+            LOGGER.error("Error replaying record: {}", t.getMessage());
           }
         });
         return null;
       });
     }
 
-    public void checkError() throws RecoveryException {
+    private void checkError() throws RecoveryException {
       Throwable t = firstError.get();
       if (t != null) {
         throw new RecoveryException("Caught an error recovering from log at " + dbHome.getAbsolutePath(), t);
       }
     }
 
-    public void finish() throws InterruptedException {
+    public void finish() throws RecoveryException {
       submitJob(true);
       replayPool.shutdown();
       boolean done;
       do {
-        done = replayPool.awaitTermination(2, MINUTES);
+        try {
+          done = replayPool.awaitTermination(2, MINUTES);
+        } catch (InterruptedException e) {
+          throw new RecoveryException("Interrupted during finish", e);
+        }
         if (!done) {
           LOGGER.warn("Unable to ensure recovery completion.");
           LOGGER.warn("Cannot proceed further. Checking Again for recovery completion...");
         }
       } while (!done);
 
+      checkError();
       listener.recovered();
-      LOGGER.debug("count " + getReplayCount());
+      LOGGER.debug("count {}", getReplayCount());
     }
   }
 

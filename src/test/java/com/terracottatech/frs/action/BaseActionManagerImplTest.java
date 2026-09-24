@@ -59,11 +59,10 @@ public abstract class BaseActionManagerImplTest {
     ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager = mock(ObjectManager.class);
     ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec = mock(ActionCodec.class);
     EncryptionManager manager = mock(EncryptionManager.class);
-    when(manager.convert(any(Action.class))).thenReturn(mock(Action.class));
     when(actionCodec.encode(any(Action.class))).thenReturn(new ByteBuffer[] {byteBufferWithInt(10)});
     when(actionCodec.decode(any(ByteBuffer[].class))).thenReturn(mock(Action.class));
     logMgr = mock(LogManager.class);
-    actionMgr = new ActionManagerImpl(logMgr, objectManager, manager, actionCodec, new MasterLogRecordFactory());
+    actionMgr = new ActionManagerImpl(logMgr, objectManager, actionCodec, new MasterLogRecordFactory());
   }
 
   Answer<Future<Void>> answerOnAppend(final boolean random, final boolean single, final int higherLimit) {

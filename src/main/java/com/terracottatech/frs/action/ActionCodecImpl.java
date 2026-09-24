@@ -38,53 +38,68 @@ public final class ActionCodecImpl<I, K, V> implements ActionCodec<I, K, V> {
   private static final ActionID NULL_ACTION_ID = new ActionID(-1, -1);
 
   private final Map<Class<? extends Action>, ActionID> classToId =
-          new ConcurrentHashMap<Class<? extends Action>, ActionID>();
-  private final Map<ActionID, ActionFactory<I, K, V>> idToFactory =
-          new ConcurrentHashMap<ActionID, ActionFactory<I, K, V>>();
+          new ConcurrentHashMap<>();
+  private final Map<ActionID, ActionHandler<I, K, V, ? extends Action>> idToHandler =
+          new ConcurrentHashMap<>();
   private final ObjectManager<I, K, V> objectManager;
 
   public ActionCodecImpl(ObjectManager<I, K, V> objectManager) {
     this.objectManager = objectManager;
-    registerAction(NULL_ACTION_ID, NullAction.class, NullAction.<I, K, V>factory());
+    registerAction(NULL_ACTION_ID, NullAction.class, NullAction.handler());
   }
 
-  private synchronized void registerAction(ActionID id, Class<? extends Action> actionClass, ActionFactory<I, K, V> actionFactory) {
+  private synchronized <T extends Action> void registerAction(ActionID id, Class<? extends Action> actionClass, 
+                                                              ActionHandler<I, K, V, T> actionHandler) {
     if (classToId.containsKey(actionClass)) {
       throw new IllegalArgumentException(
           "Action class " + actionClass + " already registered to id " + classToId.get(
               actionClass));
     }
-    if (idToFactory.containsKey(id)) {
+    if (idToHandler.containsKey(id)) {
       throw new IllegalArgumentException(
-          "Id " + id + " already registered to action class " + idToFactory.get(id));
+          "Id " + id + " already registered to action class " + idToHandler.get(id));
     }
     classToId.put(actionClass, id);
-    idToFactory.put(id, actionFactory);
+    idToHandler.put(id, actionHandler);
   }
 
   @Override
-  public synchronized void registerAction(int collectionId, int actionId, Class<? extends Action> actionClass,
-                             ActionFactory<I, K, V> actionFactory) {
-    registerAction(new ActionID(collectionId, actionId), actionClass, actionFactory);
+  public synchronized <T extends Action> void registerAction(int collectionId, int actionId, 
+                                                             Class<? extends Action> actionClass, 
+                                                             ActionHandler<I, K, V, T> actionHandler) {
+    registerAction(new ActionID(collectionId, actionId), actionClass, actionHandler);
+  }
+
+  @Override
+  public synchronized <T extends Action> void updateHandler(Class<? extends Action> actionClass, 
+                                                            ActionHandler<I, K, V, T> actionHandler) {
+    if(!classToId.containsKey(actionClass)) {
+      throw new IllegalArgumentException("No handler found for: " + actionClass);
+    }
+    idToHandler.put(classToId.get(actionClass), actionHandler);
   }
 
   @Override
   public Action decode(ByteBuffer[] buffers) {
     ActionID id = ActionID.withByteBuffers(buffers);
-    ActionFactory<I, K, V> factory = idToFactory.get(id);
-    if (factory == null)
+    ActionHandler<I, K, V, ? extends Action> handler = idToHandler.get(id);
+    if (handler == null)
       throw new IllegalArgumentException("Unknown Action type id= " + id);
-    return factory.create(objectManager, this, buffers);
+    return handler.decode(objectManager, this, buffers);
   }
 
   @Override
   public ByteBuffer[] encode(Action action) {
-    return concatenate(headerBuffer(action), action.getPayload(this));
+    if (!classToId.containsKey(action.getClass()))
+      throw new IllegalArgumentException("Unknown action class " + action.getClass());
+    ActionHandler<I, K, V, Action> handler = (ActionHandler<I, K, V, Action>)idToHandler.get(classToId.get(action.getClass()));
+    if (handler == null) {
+      throw new IllegalStateException("No handler found for " + action.getClass());
+    }
+    return concatenate(headerBuffer(action), handler.encode(action, this));
   }
 
   private ByteBuffer headerBuffer(Action action) {
-    if (!classToId.containsKey(action.getClass()))
-      throw new IllegalArgumentException("Unknown action class " + action.getClass());
     return classToId.get(action.getClass()).toByteBuffer();
   }
 

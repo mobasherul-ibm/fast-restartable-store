@@ -35,31 +35,29 @@ public class ActionManagerImpl implements ActionManager {
 
   private final LogManager             logManager;
   private final ObjectManager<?, ?, ?> objectManager;
-  private final EncryptionManager encryptionManager;
   private final ActionCodec            actionCodec;
   private final LogRecordFactory       logRecordFactory;
 
   private final AtomicInteger          happeningCount;
   private final ReentrantLock          stateLock;
-  private final Condition              happenedCondition;
+  private final Condition              idleCondition;
   private final Condition              resumeCondition;
   private volatile int pauseRequestCount = 0;
 
   public ActionManagerImpl(LogManager logManager, ObjectManager<?, ?, ?> objectManager,
-                           EncryptionManager encryptionManager, ActionCodec actionCodec, LogRecordFactory logRecordFactory) {
+                           ActionCodec actionCodec, LogRecordFactory logRecordFactory) {
     this.logManager = logManager;
     this.objectManager = objectManager;
-    this.encryptionManager = encryptionManager;
     this.actionCodec = actionCodec;
     this.logRecordFactory = logRecordFactory;
     this.happeningCount = new AtomicInteger(0);
     this.stateLock = new ReentrantLock();
-    this.happenedCondition = this.stateLock.newCondition();
+    this.idleCondition = this.stateLock.newCondition();
     this.resumeCondition = this.stateLock.newCondition();
   }
 
   private LogRecord wrapAction(Action action) {
-    ByteBuffer[] payload = actionCodec.encode(encryptionManager.convert(action));
+    ByteBuffer[] payload = actionCodec.encode(action);
     return logRecordFactory.createLogRecord(payload, action);
   }
 
@@ -99,26 +97,21 @@ public class ActionManagerImpl implements ActionManager {
   public Future<Void> syncHappenedAndPause(Action action) throws InterruptedException {
     stateLock.lock();
     try {
-      pauseHelper();
+      pause();
       return logManager.appendAndSync(wrapAction(action));
     } finally {
       stateLock.unlock();
     }
   }
   
-  // must be called under stateLock
-  private void pauseHelper() throws InterruptedException {
-    pauseRequestCount++;
-    while(happeningCount.get() > 0) {
-      happenedCondition.await();
-    } 
-  }
-  
   @Override
   public void pause() throws InterruptedException {
     stateLock.lock();
     try {
-      pauseHelper();
+      pauseRequestCount++;
+      while(happeningCount.get() > 0) {
+        idleCondition.await();
+      }
     } finally {
       stateLock.unlock();
     }
@@ -128,11 +121,8 @@ public class ActionManagerImpl implements ActionManager {
   public void resume() {
     stateLock.lock();
     try {
-      if (pauseRequestCount > 0) {
-        pauseRequestCount--;
-        if (pauseRequestCount == 0) {
-          resumeCondition.signalAll();
-        }
+      if (--pauseRequestCount == 0) {
+        resumeCondition.signalAll();
       }
     } finally {
       stateLock.unlock();
@@ -154,18 +144,10 @@ public class ActionManagerImpl implements ActionManager {
         if (pauseRequestCount > 0) {
           try {
             if (happeningCount.decrementAndGet() == 0) {
-              this.happenedCondition.signalAll();
+              this.idleCondition.signalAll();
             }
-            boolean interrupted = false;
             while (pauseRequestCount > 0) {
-              try {
-                resumeCondition.await();
-              } catch (InterruptedException e) {
-                interrupted = true;
-              }
-            }
-            if (interrupted) {
-              Thread.currentThread().interrupt();
+              resumeCondition.awaitUninterruptibly();
             }
           } finally {
             happeningCount.incrementAndGet();
@@ -178,17 +160,17 @@ public class ActionManagerImpl implements ActionManager {
   }
 
   private void exitHappened() {
-    happeningCount.decrementAndGet();
-    // ok to do a dirty check first..
     if (pauseRequestCount > 0) {
       stateLock.lock();
       try {
-        if (happeningCount.get() == 0) {
-          this.happenedCondition.signalAll();
+        if (happeningCount.decrementAndGet() == 0) {
+          idleCondition.signalAll();
         }
       } finally {
         stateLock.unlock();
       }
+    } else {
+      happeningCount.decrementAndGet();
     }
   }
 }

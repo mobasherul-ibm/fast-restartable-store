@@ -15,14 +15,12 @@
  */
 package com.terracottatech.frs.cipher;
 
-import com.terracottatech.frs.action.Action;
-
 import java.util.List;
-import java.util.Optional;
 
 public interface EncryptionManager {
-  
+
   String getCurrToken();
+
   /**
    * Gets the token identifying the previously used encryption key, if any.
    *
@@ -52,6 +50,4 @@ public interface EncryptionManager {
    * @param tokens list of tokens identifying the encryption key to remove
    */
   void remove(List<String> tokens);
-  
-  Action convert(Action action);
 }

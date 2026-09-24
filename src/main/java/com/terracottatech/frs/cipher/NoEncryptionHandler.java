@@ -15,8 +15,6 @@
  */
 package com.terracottatech.frs.cipher;
 
-import com.terracottatech.frs.action.Action;
-
 import java.util.Collections;
 import java.util.List;
 
@@ -45,10 +43,5 @@ public class NoEncryptionHandler implements EncryptionHandler {
   @Override
   public void remove(List<String> tokens) {
     throw new UnsupportedOperationException("operation unsupported");
-  }
-
-  @Override
-  public Action convert(Action action) {
-    return action;
   }
 }
