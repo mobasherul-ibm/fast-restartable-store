@@ -18,6 +18,7 @@ package com.terracottatech.frs.cipher;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -180,7 +181,7 @@ public class AESCipherManagerTest {
 
     // Now there should be a previous token
     assertFalse(cipherManager.getPreviousTokens().isEmpty());
-    assertEquals("token1", cipherManager.getPreviousTokens().get(0));
+    assertEquals("token1", cipherManager.getPreviousTokens().iterator().next());
   }
 
   @Test
@@ -262,7 +263,7 @@ public class AESCipherManagerTest {
     assertTrue(cipherManager.isUsingEncKey("token2"));
     assertTrue(cipherManager.isUsingEncKey("token3"));
 
-    List<String> list = cipherManager.getPreviousTokens();
+    Collection<String> list = cipherManager.getPreviousTokens();
     assertThat(list.size(), CoreMatchers.is(2));
     assertTrue(list.contains("token1"));
     assertTrue(list.contains("token2"));

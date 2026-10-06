@@ -17,17 +17,18 @@ package com.terracottatech.frs.cipher;
 
 import com.terracottatech.frs.action.ActionCodec;
 
+import java.util.Collection;
 import java.util.List;
 
-public interface EncryptionHandler<I, K, V> extends ActionCodec<I, K, V> {
+public interface EncryptedActionCodec<I, K, V> extends ActionCodec<I, K, V> {
 
   String getCurrToken();
 
-  List<String> getPreviousTokens();
+  Collection<String> getPreviousTokens();
 
   boolean isUsingEncKey(String token);
 
   void add(String token, byte[] key);
 
-  void remove(List<String> tokens);
+  void remove(Collection<String> tokens);
 }

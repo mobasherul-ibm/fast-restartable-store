@@ -16,7 +16,7 @@
 package com.terracottatech.frs.cipher;
 
 import java.nio.ByteBuffer;
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Interface for managing encryption and decryption operations in the Fast Restartable Store.
@@ -76,7 +76,7 @@ public interface CipherManager {
    *
    * @return list containing the previous tokens
    */
-  List<String> getPreviousTokens();
+  Collection<String> getPreviousTokens();
 
   /**
    * Checks if the cipher manager is currently using the encryption key identified by the given token.
@@ -99,5 +99,5 @@ public interface CipherManager {
    *
    * @param tokens list of tokens identifying the encryption key to remove
    */
-  void remove(List<String> tokens);
+  void remove(Collection<String> tokens);
 }

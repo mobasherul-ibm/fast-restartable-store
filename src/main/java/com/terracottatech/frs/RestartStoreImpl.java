@@ -48,6 +48,7 @@ import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -400,7 +401,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
   }
 
   private void updateKeys() {
-    List<String> oldTokens = encryptionManager.getPreviousTokens();
+    Collection<String> oldTokens = encryptionManager.getPreviousTokens();
     if(!oldTokens.isEmpty()) {
       encryptionManager.remove(oldTokens);
       if(encCompletionConsumer != null) {
@@ -678,7 +679,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
     private final List<String> tokens = new ArrayList<>();
     private final Throwable error;
     
-    private EncryptionCompletionEventImpl(RestartStore<?,?,?> restartStore, List<String> tokens, Throwable error) {
+    private EncryptionCompletionEventImpl(RestartStore<?,?,?> restartStore, Collection<String> tokens, Throwable error) {
       this.restartStore = restartStore;
       this.tokens.addAll(tokens);
       this.error = error;

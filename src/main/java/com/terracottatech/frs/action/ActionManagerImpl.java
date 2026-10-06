@@ -16,7 +16,6 @@
 package com.terracottatech.frs.action;
 
 import com.terracottatech.frs.DisposableLifecycle;
-import com.terracottatech.frs.cipher.EncryptionManager;
 import com.terracottatech.frs.log.LogManager;
 import com.terracottatech.frs.log.LogRecord;
 import com.terracottatech.frs.log.LogRecordFactory;
@@ -35,7 +34,7 @@ public class ActionManagerImpl implements ActionManager {
 
   private final LogManager             logManager;
   private final ObjectManager<?, ?, ?> objectManager;
-  private final EncryptionManager<?,?,?> encryptionManager;
+  private final ActionCodec<?,?,?>     actionCodec;
   private final LogRecordFactory       logRecordFactory;
 
   private final AtomicInteger          happeningCount;
@@ -45,10 +44,10 @@ public class ActionManagerImpl implements ActionManager {
   private volatile int pauseRequestCount = 0;
 
   public ActionManagerImpl(LogManager logManager, ObjectManager<?, ?, ?> objectManager,
-                           EncryptionManager<?,?,?> encryptionManager, LogRecordFactory logRecordFactory) {
+                           ActionCodec<?,?,?> actionCodec, LogRecordFactory logRecordFactory) {
     this.logManager = logManager;
     this.objectManager = objectManager;
-    this.encryptionManager = encryptionManager;
+    this.actionCodec = actionCodec;
     this.logRecordFactory = logRecordFactory;
     this.happeningCount = new AtomicInteger(0);
     this.stateLock = new ReentrantLock();
@@ -57,7 +56,7 @@ public class ActionManagerImpl implements ActionManager {
   }
 
   private LogRecord wrapAction(Action action) {
-    ByteBuffer[] payload = encryptionManager.encode(action);
+    ByteBuffer[] payload = actionCodec.encode(action);
     return logRecordFactory.createLogRecord(payload, action);
   }
 
@@ -86,7 +85,7 @@ public class ActionManagerImpl implements ActionManager {
 
   @Override
   public Action extract(LogRecord record) {
-    Action a = encryptionManager.decode(record.getPayload());
+    Action a = actionCodec.decode(record.getPayload());
     if ( a instanceof DisposableLifecycle ) {
         ((DisposableLifecycle)a).setDisposable(record);
     }

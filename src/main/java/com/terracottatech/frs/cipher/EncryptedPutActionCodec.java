@@ -26,14 +26,11 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-public class EncryptedPutActionSubCodec implements ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, PutAction> {
+public class EncryptedPutActionCodec implements ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, PutAction> {
   private final CipherManager cipherManager;
-  private final ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, PutAction> delegate;
 
-  public EncryptedPutActionSubCodec(CipherManager cipherManager,
-                                    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, PutAction> delegate) {
+  public EncryptedPutActionCodec(CipherManager cipherManager) {
     this.cipherManager = cipherManager;
-    this.delegate = delegate;
   }
 
   @Override
@@ -49,11 +46,9 @@ public class EncryptedPutActionSubCodec implements ActionSubCodec<ByteBuffer, By
           throw new IllegalStateException("More than one element is present");
         }).orElse(-1L);
     byte[] ctoken = cipherManager.getCurrentToken().getBytes(StandardCharsets.UTF_8);
-    // 16 for lsn, idenifier length, ctoken length, 4 for negative number , 1 for version1 of encrypted payload
+    // 16 for lsn, identifier length, ctoken length, 4 for negative number , 1 for version1 of encrypted payload
     int size = identifier.remaining() + ctoken.length + 21;
     ByteBuffer metaData = ByteBuffer.allocate(size);
-    metaData.putInt(0xFFFFFFFF);
-    metaData.put((byte) 0x01);
     metaData.putLong(invalidatedLsn);
     metaData.putInt(identifier.remaining());
     metaData.put(identifier);
@@ -88,34 +83,12 @@ public class EncryptedPutActionSubCodec implements ActionSubCodec<ByteBuffer, By
   @Override
   public Action decode(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager,
                        ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec, ByteBuffer[] buffers) {
-    if (isEncEnabled(buffers)) {
-      ByteBufferUtils.getInt(buffers);
-      ByteBufferUtils.get(buffers);
-      long invalidatedLsn = ByteBufferUtils.getLong(buffers);
-      int len = ByteBufferUtils.getInt(buffers);
-      ByteBuffer identifier = ByteBufferUtils.getBytes(len, buffers);
-      int tokenLength = ByteBufferUtils.getInt(buffers);
-      ByteBuffer tokenBuffer = ByteBufferUtils.getBytes(tokenLength, buffers);
-      String token = StandardCharsets.UTF_8.decode(tokenBuffer).toString();
-      return new LazyDecryptingGettableAction(objectManager, cipherManager, invalidatedLsn, identifier, token, buffers);
-    } else {
-      return delegate.decode(objectManager, codec, buffers);
-    }
-  }
-
-  private boolean isEncEnabled(ByteBuffer[] buffers) {
-    boolean read = false;
-    boolean res = false;
-    for (ByteBuffer buffer : buffers) {
-      if (buffer.hasRemaining()) {
-        read = true;
-        res = buffer.getInt(buffer.position()) < 0;
-        break;
-      }
-    }
-    if (!read) {
-      throw new BufferUnderflowException();
-    }
-    return res;
+    long invalidatedLsn = ByteBufferUtils.getLong(buffers);
+    int len = ByteBufferUtils.getInt(buffers);
+    ByteBuffer identifier = ByteBufferUtils.getBytes(len, buffers);
+    int tokenLength = ByteBufferUtils.getInt(buffers);
+    ByteBuffer tokenBuffer = ByteBufferUtils.getBytes(tokenLength, buffers);
+    String token = StandardCharsets.UTF_8.decode(tokenBuffer).toString();
+    return new LazyDecryptingGettableAction(objectManager, cipherManager, invalidatedLsn, identifier, token, buffers);
   }
 }

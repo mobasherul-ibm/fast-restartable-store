@@ -20,10 +20,10 @@ import com.terracottatech.frs.action.ActionCodec;
 import com.terracottatech.frs.action.ActionSubCodec;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 
-public class NoEncryptionHandler implements EncryptionHandler<ByteBuffer, ByteBuffer, ByteBuffer> {
+public class NoEncryptionHandler implements EncryptedActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> {
 
   private final ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec;
 
@@ -37,7 +37,7 @@ public class NoEncryptionHandler implements EncryptionHandler<ByteBuffer, ByteBu
   }
 
   @Override
-  public List<String> getPreviousTokens() {
+  public Collection<String> getPreviousTokens() {
     return Collections.emptyList();
   }
 
@@ -52,28 +52,17 @@ public class NoEncryptionHandler implements EncryptionHandler<ByteBuffer, ByteBu
   }
 
   @Override
-  public void remove(List<String> tokens) {
+  public void remove(Collection<String> tokens) {
     throw new UnsupportedOperationException("operation unsupported");
   }
 
   @Override
   public <T extends Action> void registerAction(int collectionId, int actionId, Class<T> actionClass,
-                                                ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T> actionSubCodec) {
+                                                ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? super T> actionSubCodec) {
     actionCodec.registerAction(collectionId, actionId, actionClass, actionSubCodec);
   }
 
   
-  @Override
-  public <T extends Action> ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T> getSubCodec(
-      Class<? extends Action> actionClass) {
-    return actionCodec.getSubCodec(actionClass);
-  }
-
-  @Override
-  public Class<? extends Action> getActionClass(ByteBuffer[] buffers) {
-    return actionCodec.getActionClass(buffers);
-  }
-
   @Override
   public Action decode(ByteBuffer[] buffer) {
     return actionCodec.decode(buffer);
@@ -82,10 +71,5 @@ public class NoEncryptionHandler implements EncryptionHandler<ByteBuffer, ByteBu
   @Override
   public ByteBuffer[] encode(Action action) {
     return actionCodec.encode(action);
-  }
-
-  @Override
-  public ByteBuffer getHeader(Action action) {
-    return actionCodec.getHeader(action);
   }
 }

@@ -15,7 +15,6 @@
  */
 package com.terracottatech.frs;
 
-import com.terracottatech.frs.action.ActionCodec;
 import com.terracottatech.frs.action.ActionCodecImpl;
 import com.terracottatech.frs.action.ActionManager;
 import com.terracottatech.frs.action.ActionManagerImpl;
@@ -54,9 +53,8 @@ public abstract class RestartStoreFactory {
   private RestartStoreFactory() {
   }
 
-  private static ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> createCodec(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager) {
-    ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec =
-            new ActionCodecImpl(objectManager);
+  private static EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> createCodec(Configuration configuration, ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager) {
+    EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> codec = new EncryptionManagerImpl(configuration, new ActionCodecImpl(objectManager));
     MapActions.registerActions(0, codec);
     TransactionActions.registerActions(1, codec);
     CompactionActions.registerActions(2, codec);
@@ -82,13 +80,12 @@ public abstract class RestartStoreFactory {
     IOManager ioManager = new NIOManager(configuration,writingSource);
     ReadManager readManager = new ReadManagerImpl(ioManager, configuration.getString(FrsProperty.FORCE_LOG_REGION_FORMAT));
     LogManager logManager = new StagingLogManager(ioManager,writingSource,configuration);
-    ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec = createCodec(objectManager);
-    EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> encryptionManager = new EncryptionManagerImpl(configuration, objectManager, codec);
-    ActionManager actionManager = new ActionManagerImpl(logManager, objectManager, encryptionManager,
+    EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> codec = createCodec(configuration, objectManager);
+    ActionManager actionManager = new ActionManagerImpl(logManager, objectManager, codec,
         new MasterLogRecordFactory());
     TransactionManager transactionManager = new TransactionManagerImpl(actionManager);
     return new RestartStoreImpl(objectManager, transactionManager, logManager,
-        actionManager, encryptionManager, readManager, ioManager, configuration);
+        actionManager, codec, readManager, ioManager, configuration);
   }
 
   public static RestartStore<ByteBuffer, ByteBuffer, ByteBuffer> createStore(

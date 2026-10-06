@@ -17,7 +17,7 @@ package com.terracottatech.frs.cipher;
 
 import com.terracottatech.frs.action.ActionCodec;
 
-import java.util.List;
+import java.util.Collection;
 
 public interface EncryptionManager<I, K, V> extends ActionCodec<I, K, V> {
 
@@ -28,7 +28,7 @@ public interface EncryptionManager<I, K, V> extends ActionCodec<I, K, V> {
    *
    * @return list of previous key tokens
    */
-  List<String> getPreviousTokens();
+  Collection<String> getPreviousTokens();
 
   /**
    * Checks if the encryption key identified by the given token is being used.
@@ -51,5 +51,5 @@ public interface EncryptionManager<I, K, V> extends ActionCodec<I, K, V> {
    *
    * @param tokens list of tokens identifying the encryption key to remove
    */
-  void remove(List<String> tokens);
+  void remove(Collection<String> tokens);
 }
