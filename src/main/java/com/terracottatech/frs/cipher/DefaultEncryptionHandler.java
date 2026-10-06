@@ -23,58 +23,50 @@ import com.terracottatech.frs.action.ActionCodec;
 import com.terracottatech.frs.action.ActionSubCodec;
 import com.terracottatech.frs.action.NullAction;
 import com.terracottatech.frs.compaction.CompactionAction;
-import com.terracottatech.frs.object.ObjectManager;
 import com.terracottatech.frs.transaction.TransactionCommitAction;
 import com.terracottatech.frs.transaction.TransactionalAction;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
 
-import static com.terracottatech.frs.util.ByteBufferUtils.concatenate;
-
 public class DefaultEncryptionHandler implements EncryptionHandler<ByteBuffer, ByteBuffer, ByteBuffer> {
 
+  private static final Map<Class<? extends Action>, EncryptionActionRegister> ACTION_REGISTERS = new HashMap<>();
+
+  static {
+    ACTION_REGISTERS.put(NullAction.class, transparent());
+    ACTION_REGISTERS.put(RemoveAction.class, transparent());
+    ACTION_REGISTERS.put(DeleteAction.class, transparent());
+    ACTION_REGISTERS.put(TransactionalAction.class, transparent());
+    ACTION_REGISTERS.put(TransactionCommitAction.class, transparent());
+    ACTION_REGISTERS.put(PutAction.class, (codec, cipherManager, collectionId, actionId) ->
+        codec.registerAction(99 + collectionId, actionId, PutAction.class, new EncryptedPutActionSubCodec(cipherManager))
+    );
+    ACTION_REGISTERS.put(CompactionAction.class, (codec, cipherManager, collectionId, actionId) ->
+        codec.registerAction(99 + collectionId, actionId, CompactionAction.class, new EncryptedPutActionSubCodec(cipherManager))
+    );
+  }
+
+  private static EncryptionActionRegister transparent() {
+    return (codec, cipherManager, collectionId, actionId) -> {
+    };
+  }
+
   private final CipherManager cipherManager;
-  private final ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager;
   private final ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec;
+  private final boolean encAtStartUp;
 
   private final Map<Class<? extends Action>, Function<ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? extends Action>,
       ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? extends Action>>> handlers = new HashMap<>();
 
-  public DefaultEncryptionHandler(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager,
-                                  ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec,
-                                  Map<String, byte[]> tokenToKeyMap, String currentToken) {
+  public DefaultEncryptionHandler(ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec,
+                                  Map<String, byte[]> tokenToKeyMap, String currentToken, boolean encAtStartUp) {
     cipherManager = new AESCipherManager(tokenToKeyMap, currentToken);
-    this.objectManager = objectManager;
     this.actionCodec = actionCodec;
-
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, PutAction> encryptedPutSubCodec =
-        new EncryptedPutActionSubCodec(this.cipherManager, actionCodec.getSubCodec(PutAction.class));
-
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, CompactionAction> encryptedCompactionSubCodec =
-        new ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, CompactionAction>() {
-          @Override
-          public ByteBuffer[] encode(CompactionAction action, ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec) {
-            return encryptedPutSubCodec.encode(action, codec);   // CompactionAction IS-A PutAction
-          }
-
-          @Override
-          public Action decode(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> om,
-                               ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec, ByteBuffer[] buffers) {
-            return encryptedPutSubCodec.decode(om, codec, buffers);
-          }
-        };
-
-    handlers.put(NullAction.class, subCodec -> subCodec);
-    handlers.put(RemoveAction.class, subCodec -> subCodec);
-    handlers.put(DeleteAction.class, subCodec -> subCodec);
-    handlers.put(TransactionalAction.class, subCodec -> subCodec);
-    handlers.put(TransactionCommitAction.class, subCodec -> subCodec);
-    handlers.put(PutAction.class, subCodec -> encryptedPutSubCodec);
-    handlers.put(CompactionAction.class, subCodec -> encryptedCompactionSubCodec);
+    this.encAtStartUp = encAtStartUp;
   }
 
   @Override
@@ -83,7 +75,7 @@ public class DefaultEncryptionHandler implements EncryptionHandler<ByteBuffer, B
   }
 
   @Override
-  public List<String> getPreviousTokens() {
+  public Collection<String> getPreviousTokens() {
     return cipherManager.getPreviousTokens();
   }
 
@@ -98,72 +90,36 @@ public class DefaultEncryptionHandler implements EncryptionHandler<ByteBuffer, B
   }
 
   @Override
-  public void remove(List<String> tokens) {
+  public void remove(Collection<String> tokens) {
     cipherManager.remove(tokens);
   }
 
-
   @Override
   public <T extends Action> void registerAction(int collectionId, int actionId, Class<T> actionClass,
-                                                ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T> actionSubCodec) {
-    actionCodec.registerAction(collectionId, actionId, actionClass, actionSubCodec);
-  }
-
-  @Override
-  public <T extends Action> ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T> getSubCodec(
-      Class<? extends Action> actionClass) {
-    return actionCodec.getSubCodec(actionClass);
-  }
-
-  @Override
-  public Class<? extends Action> getActionClass(ByteBuffer[] buffers) {
-    return actionCodec.getActionClass(buffers);
+                                                ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? super T> actionSubCodec) {
+    if (encAtStartUp) {
+      actionCodec.registerAction(collectionId, actionId, actionClass, actionSubCodec);
+    }
+    EncryptionActionRegister encActionRegister = ACTION_REGISTERS.get(actionClass);
+    if (encActionRegister == null) {
+      throw new IllegalArgumentException("No EncryptionActionRegister for: " + actionClass);
+    } else {
+      encActionRegister.register(actionCodec, cipherManager, collectionId, actionId);
+    }
   }
 
   @Override
   public Action decode(ByteBuffer[] buffers) {
-    Class<? extends Action> actionClass = actionCodec.getActionClass(buffers);
-    return invokeDecodeHelper(actionClass, buffers, this);
+    return actionCodec.decode(buffers);
   }
 
   @Override
   public ByteBuffer[] encode(Action action) {
-    return concatenate(actionCodec.getHeader(action), invokeEncodeHelper(action, this));
+    return actionCodec.encode(action);
   }
 
-  @Override
-  public ByteBuffer getHeader(Action action) {
-    return actionCodec.getHeader(action);
-  }
-
-  @SuppressWarnings("unchecked")
-  private <T extends Action> ByteBuffer[] invokeEncodeHelper(T action,
-                                                             ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> actionCodec) {
-    if (!handlers.containsKey(action.getClass())) {
-      throw new IllegalArgumentException("No handler found for action: " + action.getClass());
-    }
-
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? extends Action> baseSubCodec =
-        actionCodec.getSubCodec(action.getClass());
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? extends Action> interceptedSubCodec =
-        handlers.get(action.getClass()).apply(baseSubCodec);
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T> typedSubCodec =
-        (ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T>) interceptedSubCodec;
-    return typedSubCodec.encode(action, this);
-  }
-
-  @SuppressWarnings("unchecked")
-  private <T extends Action> Action invokeDecodeHelper(Class<T> actionClass, ByteBuffer[] buffers,
-                                                       ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec) {
-    if (!handlers.containsKey(actionClass)) {
-      throw new IllegalArgumentException("No handler found for action: " + actionClass);
-    }
-
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? extends Action> baseSubCodec = codec.getSubCodec(actionClass);
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? extends Action> interceptedSubCodec =
-        handlers.get(actionClass).apply(baseSubCodec);
-    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T> typedSubCodec =
-        (ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, T>) interceptedSubCodec;
-    return typedSubCodec.decode(objectManager, this, buffers);
+  interface EncryptionActionRegister {
+    void register(ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec, CipherManager cipherManager, int collectionId,
+                int actionId);
   }
 }

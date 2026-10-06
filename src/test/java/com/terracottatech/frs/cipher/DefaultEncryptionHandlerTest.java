@@ -15,7 +15,6 @@
  */
 package com.terracottatech.frs.cipher;
 
-import com.terracottatech.frs.DeleteAction;
 import com.terracottatech.frs.GettableAction;
 import com.terracottatech.frs.MapActions;
 import com.terracottatech.frs.PutAction;
@@ -23,15 +22,12 @@ import com.terracottatech.frs.RemoveAction;
 import com.terracottatech.frs.action.Action;
 import com.terracottatech.frs.action.ActionCodec;
 import com.terracottatech.frs.action.ActionCodecImpl;
-import com.terracottatech.frs.action.NullAction;
 import com.terracottatech.frs.compaction.CompactionAction;
 import com.terracottatech.frs.compaction.CompactionActions;
 import com.terracottatech.frs.object.ObjectManager;
 import com.terracottatech.frs.object.SimpleObjectManagerEntry;
 import com.terracottatech.frs.transaction.TransactionActions;
 
-import com.terracottatech.frs.transaction.TransactionCommitAction;
-import com.terracottatech.frs.transaction.TransactionalAction;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -67,7 +63,6 @@ public class DefaultEncryptionHandlerTest {
   private static final String TOKEN2 = "token2";
 
   private ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager;
-  private ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec;
 
   private byte[] key1Bytes;
   private byte[] key2Bytes;
@@ -80,12 +75,6 @@ public class DefaultEncryptionHandlerTest {
   @Before
   public void setUp() throws Exception {
     objectManager = mock(ObjectManager.class);
-    codec = new ActionCodecImpl(objectManager);
-
-    // Register all standard actions into the codec
-    MapActions.registerActions(MAP_COLLECTION_ID, codec);
-    CompactionActions.registerActions(COMPACTION_COLLECTION_ID, codec);
-    TransactionActions.registerActions(TRANSACTION_COLLECTION_ID, codec);
 
     KeyGenerator kg = KeyGenerator.getInstance("AES");
     kg.init(256);
@@ -154,7 +143,7 @@ public class DefaultEncryptionHandlerTest {
     assertTrue(encoded.length > 0);
 
     // The raw concatenated bytes must NOT equal a plain unencrypted encoding
-    ByteBuffer[] plainEncoded = codec.encode(put);
+    ByteBuffer[] plainEncoded = plainCodec().encode(put);
     assertThat(flatten(encoded), not(is(flatten(plainEncoded))));
   }
 
@@ -169,7 +158,7 @@ public class DefaultEncryptionHandlerTest {
     assertTrue(encoded.length > 0);
 
     // The raw concatenated bytes must NOT equal a plain unencrypted encoding
-    ByteBuffer[] plainEncoded = codec.encode(compactionAction);
+    ByteBuffer[] plainEncoded = plainCodec().encode(compactionAction);
     assertThat(flatten(encoded), not(is(flatten(plainEncoded))));
   }
 
@@ -263,62 +252,40 @@ public class DefaultEncryptionHandlerTest {
 
     // RemoveAction is pass-through — encode via handler must equal encode via raw codec
     // We just verify the bytes are identical to the plain codec output.
-    ByteBuffer[] plainRemove = codec.encode(removeAction());
+    ByteBuffer[] plainRemove = plainCodec().encode(removeAction());
 
     // Handler must produce identical bytes for a non-encrypted action
     ByteBuffer[] handlerRemove = handler.encode(removeAction());
     assertArrayEquals(flatten(plainRemove).array(), flatten(handlerRemove).array());
   }
 
-  @Test
-  public void testGetHandlerDelegatesToCodec() {
-    DefaultEncryptionHandler handler = buildHandler(TOKEN1, key1Bytes);
-    assertNotNull(handler.getSubCodec(NullAction.class));
-    assertNotNull(handler.getSubCodec(PutAction.class));
-    assertNotNull(handler.getSubCodec(RemoveAction.class));
-    assertNotNull(handler.getSubCodec(DeleteAction.class));
-    assertNotNull(handler.getSubCodec(CompactionAction.class));
-    assertNotNull(handler.getSubCodec(TransactionalAction.class));
-    assertNotNull(handler.getSubCodec(TransactionCommitAction.class));
+  private DefaultEncryptionHandler buildHandler(String token, byte[] keyBytes) {
+    ActionCodecImpl codec = new ActionCodecImpl(objectManager);
+    DefaultEncryptionHandler encHandler = new DefaultEncryptionHandler(codec, Collections.singletonMap(token, keyBytes), token, true);
+    MapActions.registerActions(MAP_COLLECTION_ID, encHandler);
+    TransactionActions.registerActions(TRANSACTION_COLLECTION_ID, encHandler);
+    CompactionActions.registerActions(COMPACTION_COLLECTION_ID, encHandler);
+    return encHandler;
   }
 
-  @Test
-  public void testGetActionClassReadsHeaderFromBuffer() {
-    DefaultEncryptionHandler handler = buildHandler(TOKEN1, key1Bytes);
-    ByteBuffer[] encoded = handler.encode(putAction(-1L));
-
-    // getActionClass peeks the 8-byte ActionId header
-    Class<? extends Action> cls = handler.getActionClass(encoded);
-    assertEquals(PutAction.class, cls);
-  }
-
-  @Test
-  public void testGetHeaderMatchesCodecGetHeader() {
-    DefaultEncryptionHandler handler = buildHandler(TOKEN1, key1Bytes);
-    PutAction put = putAction(-1L);
-
-    ByteBuffer headerFromHandler = handler.getHeader(put);
-    ByteBuffer headerFromCodec = codec.getHeader(put);
-
-    assertEquals(headerFromCodec, headerFromHandler);
-  }
-
-  private DefaultEncryptionHandler buildHandler(
-      String token, byte[] keyBytes) {
-    return new DefaultEncryptionHandler(objectManager, codec, tokenMap(token, keyBytes), token);
+  private ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> plainCodec() {
+    ActionCodecImpl actionCodec = new ActionCodecImpl(objectManager);
+    MapActions.registerActions(MAP_COLLECTION_ID, actionCodec);
+    TransactionActions.registerActions(TRANSACTION_COLLECTION_ID, actionCodec);
+    CompactionActions.registerActions(COMPACTION_COLLECTION_ID, actionCodec);
+    return actionCodec;
   }
 
   private DefaultEncryptionHandler buildWithTwoTokens() {
     Map<String, byte[]> map = new HashMap<>();
     map.put(TOKEN1, key1Bytes);
     map.put(TOKEN2, key2Bytes);
-    return new DefaultEncryptionHandler(objectManager, codec, map, TOKEN2);
-  }
-
-  private static Map<String, byte[]> tokenMap(String token, byte[] keyBytes) {
-    Map<String, byte[]> map = new HashMap<>();
-    map.put(token, keyBytes);
-    return map;
+    ActionCodecImpl codec = new ActionCodecImpl(objectManager);
+    DefaultEncryptionHandler encHandler = new DefaultEncryptionHandler(codec, map, TOKEN2, true);
+    MapActions.registerActions(MAP_COLLECTION_ID, encHandler);
+    TransactionActions.registerActions(TRANSACTION_COLLECTION_ID, encHandler);
+    CompactionActions.registerActions(COMPACTION_COLLECTION_ID, encHandler);
+    return encHandler;
   }
 
   private PutAction putAction(long invalidatedLsn) {

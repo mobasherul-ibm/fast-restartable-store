@@ -15,7 +15,10 @@
  */
 package com.terracottatech.frs.cipher;
 
+import com.terracottatech.frs.PutAction;
 import com.terracottatech.frs.action.ActionCodec;
+import com.terracottatech.frs.action.ActionSubCodec;
+import com.terracottatech.frs.compaction.CompactionAction;
 import com.terracottatech.frs.config.Configuration;
 import com.terracottatech.frs.config.FrsProperty;
 
@@ -26,7 +29,6 @@ import java.util.Collections;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 
-import com.terracottatech.frs.object.ObjectManager;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -37,13 +39,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class EncryptionManagerImplTest {
 
   private Configuration mockConfig;
-  private ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> mockObjectManager;
   private ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> mockActionCodec;
   private String testKey1;
   private String testKey2;
@@ -56,7 +60,6 @@ public class EncryptionManagerImplTest {
   public void setUp() throws Exception {
     mockConfig = mock(Configuration.class);
     mockActionCodec = mock(ActionCodec.class);
-    mockObjectManager = mock(ObjectManager.class);
     // Generate test keys
     KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
     keyGenerator.init(256);
@@ -76,7 +79,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(false);
 
     // Create manager
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     // Verify it uses NoEncryptionHandler
     assertNotNull("Manager should not be null", manager);
@@ -92,7 +95,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_OLD_TOKENS_AND_KEYS)).thenReturn(null);
 
     // Create manager
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     // Verify
     assertNotNull("Manager should not be null", manager);
@@ -109,7 +112,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_OLD_TOKENS_AND_KEYS)).thenReturn(TOKEN1 + TOKEN_KEY_DELIMITER + testKey1);
 
     // Create manager
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     // Verify
     assertNotNull("Manager should not be null", manager);
@@ -117,14 +120,14 @@ public class EncryptionManagerImplTest {
     assertTrue("Should be using the old token", manager.isUsingEncKey(TOKEN1));
     assertFalse("Previous token should be present with two keys",
         manager.getPreviousTokens().isEmpty());
-    assertEquals("Previous token should be TOKEN1", TOKEN1, manager.getPreviousTokens().get(0));
+    assertEquals("Previous token should be TOKEN1", TOKEN1, manager.getPreviousTokens().iterator().next());
   }
 
   @Test
   public void testGetPreviousTokenWithEncryptionDisabled() {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(false);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     assertTrue("Previous token should not be present when encryption is disabled",
         manager.getPreviousTokens().isEmpty());
@@ -136,7 +139,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(true);
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_NEW_TOKEN_AND_KEY)).thenReturn(TOKEN2 + TOKEN_KEY_DELIMITER + testKey2);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     assertTrue("Should return true for existing token", manager.isUsingEncKey(TOKEN2));
     assertFalse("Should return false for non-existing token", manager.isUsingEncKey("nonExistentToken"));
@@ -146,7 +149,7 @@ public class EncryptionManagerImplTest {
   public void testIsUsingEncKeyWithEncryptionDisabled() {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(false);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     assertFalse("Should return false for any token when encryption is disabled",
         manager.isUsingEncKey(TOKEN1));
@@ -158,7 +161,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(true);
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_NEW_TOKEN_AND_KEY)).thenReturn(TOKEN1 + TOKEN_KEY_DELIMITER + testKey1);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     // Add a new token
     manager.add(TOKEN2, Base64.getDecoder().decode(testKey2));
@@ -173,13 +176,19 @@ public class EncryptionManagerImplTest {
     // Setup config for disabled encryption
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(false);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
+    ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, PutAction> mockSubCodec = mock(ActionSubCodec.class);
+    manager.registerAction(0, 0, PutAction.class, mockSubCodec);
+    manager.registerAction(0, 1, CompactionAction.class, mockSubCodec);
     // Add a token (should enable encryption)
     manager.add(TOKEN1, Base64.getDecoder().decode(testKey1));
 
     // Verify the token was added and encryption is now enabled
     assertTrue("Should be using the added token", manager.isUsingEncKey(TOKEN1));
+    // Verify that the replay replayed the registration onto the new DefaultEncryptionHandler.
+    verify(mockActionCodec).registerAction(eq(99), eq(0), eq(PutAction.class), any(ActionSubCodec.class));
+    verify(mockActionCodec).registerAction(eq(99), eq(1), eq(CompactionAction.class), any(ActionSubCodec.class));
   }
 
   @Test
@@ -189,7 +198,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_NEW_TOKEN_AND_KEY)).thenReturn(TOKEN2 + TOKEN_KEY_DELIMITER + testKey2);
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_OLD_TOKENS_AND_KEYS)).thenReturn(TOKEN1 + TOKEN_KEY_DELIMITER + testKey1);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     // Verify both tokens exist
     assertTrue("TOKEN1 should exist before removal", manager.isUsingEncKey(TOKEN1));
@@ -207,7 +216,7 @@ public class EncryptionManagerImplTest {
   public void testRemoveWithEncryptionDisabled() {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(false);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     assertThrows(UnsupportedOperationException.class, () -> manager.remove(Collections.singletonList(TOKEN1)));
   }
@@ -218,7 +227,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getBoolean(FrsProperty.STORE_ENCRYPTION_ENABLE)).thenReturn(true);
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_NEW_TOKEN_AND_KEY)).thenReturn(TOKEN1 + TOKEN_KEY_DELIMITER + testKey1);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     // Add multiple tokens
     manager.add(TOKEN2, Base64.getDecoder().decode(testKey2));
@@ -238,7 +247,7 @@ public class EncryptionManagerImplTest {
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_OLD_TOKENS_AND_KEYS)).thenReturn(oldTokenAndKeys);
     when(mockConfig.getString(FrsProperty.STORE_ENCRYPTION_NEW_TOKEN_AND_KEY)).thenReturn(TOKEN3 + TOKEN_KEY_DELIMITER + testKey3);
 
-    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockObjectManager, mockActionCodec);
+    EncryptionManager manager = new EncryptionManagerImpl(mockConfig, mockActionCodec);
 
     assertTrue("TOKEN1 should be present", manager.isUsingEncKey(TOKEN1));
     assertTrue("TOKEN2 should be present", manager.isUsingEncKey(TOKEN2));

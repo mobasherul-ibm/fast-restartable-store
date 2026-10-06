@@ -16,7 +16,7 @@
 package com.terracottatech.frs.cipher;
 
 import java.nio.ByteBuffer;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -35,7 +35,7 @@ public class AESCipherManager implements CipherManager {
   private volatile SecretKey currentSecretKey;
   private volatile String currentToken;
 
-  private volatile CipherAlgorithmDelegate delegate;
+  private final CipherAlgorithmDelegate delegate;
 
   public AESCipherManager(Map<String, byte[]> tokenToKeyMap, String currentToken) {
     tokenToKeyMap.forEach((token, keyBytes) ->
@@ -70,7 +70,7 @@ public class AESCipherManager implements CipherManager {
   }
 
   @Override
-  public List<String> getPreviousTokens() {
+  public Collection<String> getPreviousTokens() {
     return tokenToKey.keySet().stream().filter(k -> !k.equals(getCurrentToken())).collect(Collectors.toList());
   }
 
@@ -87,7 +87,7 @@ public class AESCipherManager implements CipherManager {
   }
 
   @Override
-  public void remove(List<String> tokens) {
-    tokens.stream().forEach(t -> tokenToKey.remove(t));
+  public void remove(Collection<String> tokens) {
+    tokens.forEach(tokenToKey::remove);
   }
 }

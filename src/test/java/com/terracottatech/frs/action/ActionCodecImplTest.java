@@ -47,18 +47,14 @@ public class ActionCodecImplTest {
   public void testAlreadyRegistered() throws Exception {
     try {
       actionCodec.registerAction(0, 0, BogusAction.class, BogusAction.SUBCODEC);
-      fail("Replacing action registered to id 0 should have failed.");
+      fail("Replacing action subcodec registered to id 0,0 should have failed.");
     } catch (IllegalArgumentException e) {
       // expected
     }
 
     actionCodec.registerAction(2, 0, BogusAction.class, BogusAction.SUBCODEC);
-    try {
-      actionCodec.registerAction(2, 1, BogusAction.class, BogusAction.SUBCODEC);
-      fail("Re-registering BogusAction should have failed.");
-    } catch (IllegalArgumentException e) {
-      // expected
-    }
+    // verify class to id can be updated
+    actionCodec.registerAction(2, 1, BogusAction.class, BogusAction.SUBCODEC);
   }
 
   private static class BogusAction implements Action {

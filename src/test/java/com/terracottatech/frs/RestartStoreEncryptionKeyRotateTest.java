@@ -322,14 +322,17 @@ public class RestartStoreEncryptionKeyRotateTest {
       restartStore.startup().get();
       Map<String, String> map1 = createMap(restartStore, objectManager, 0);
       Map<String, String> map2 = createMap(restartStore, objectManager, 1);
+      Map<String, String> map3 = createMap(restartStore, objectManager, 2);
       for (int i = 0; i < 20000; ++i) {
         map1.put(String.valueOf(i), "val" + i);
         map2.put(String.valueOf(i), "val" + i);
+        map3.put(String.valueOf(i), "val" + i);
       }
       for (int i = 0; i < 1000; ++i) {
         map1.remove(String.valueOf(i));
         map2.remove(String.valueOf(i));
       }
+      map3.clear();
 
       oldTokenAndKey = properties.getProperty(FrsProperty.STORE_ENCRYPTION_NEW_TOKEN_AND_KEY.shortName());
       newKey = CipherHelper.generateNewKey();
@@ -358,6 +361,7 @@ public class RestartStoreEncryptionKeyRotateTest {
 
       Map<String, String> map1 = createMap(restartStore, objectManager, 0);
       Map<String, String> map2 = createMap(restartStore, objectManager, 1);
+      Map<String, String> map3 = createMap(restartStore, objectManager, 2);
       restartStore.startup().get();
       latch.await();
       for (int i = 1000; i < 20000; ++i) {
@@ -366,6 +370,7 @@ public class RestartStoreEncryptionKeyRotateTest {
       }
       assertThat(map1.size(), is(19000));
       assertThat(map2.size(), is(19000));
+      assertThat(map3.size(), is(0));
       assertThat(expiredTokens.size(), is(2));
       assertTrue(expiredTokens.contains("token1"));
       assertTrue(expiredTokens.contains("token2"));

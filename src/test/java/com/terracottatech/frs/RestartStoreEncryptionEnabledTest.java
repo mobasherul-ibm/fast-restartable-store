@@ -31,6 +31,7 @@ import java.util.Properties;
 import static com.terracottatech.frs.cipher.EncryptionManagerImpl.TOKEN_KEY_DELIMITER;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNull;
 
 public class RestartStoreEncryptionEnabledTest {
   @Rule
@@ -53,21 +54,26 @@ public class RestartStoreEncryptionEnabledTest {
           RestartStoreFactory.createStore(objectManager, path, properties);
 
       restartStore.startup().get();
-      Map<String, String> map = createMap(restartStore, objectManager, 0);
+      Map<String, String> map1 = createMap(restartStore, objectManager, 0);
+      Map<String, String> map2 = createMap(restartStore, objectManager, 1);
       for (int i = 0; i < 100; ++i) {
-        map.put(String.valueOf(i), "val" + i);
+        map1.put(String.valueOf(i), "val" + i);
+        map2.put(String.valueOf(i), "val" + i);
       }
       newKey = CipherHelper.generateNewKey();
 
       Thread t = new Thread(() -> {
-        for (int i = 100; i < 110; ++i) {
+        for (int i = 100, j = 0; i < 110; ++i, ++j) {
           try {
             Thread.sleep(100);
           } catch (InterruptedException e) {
             throw new RuntimeException(e);
           }
-          map.put(String.valueOf(i), "val" + i);
+          assertThat(map1.get(String.valueOf(j)), is("val" + j));
+          map1.remove(String.valueOf(j));
+          map1.put(String.valueOf(i), "val" + i);
         }
+        map2.clear();
       });
       t.start();
 
@@ -88,12 +94,17 @@ public class RestartStoreEncryptionEnabledTest {
       RestartStore<ByteBuffer, ByteBuffer, ByteBuffer> restartStore =
           RestartStoreFactory.createStore(objectManager, path, properties);
 
-      Map<String, String> map = createMap(restartStore, objectManager, 0);
+      Map<String, String> map1 = createMap(restartStore, objectManager, 0);
+      Map<String, String> map2 = createMap(restartStore, objectManager, 1);
       restartStore.startup().get();
 
-      for (int i = 0; i < 110; ++i) {
-        assertThat(map.get(String.valueOf(i)), is("val" + i));
+      for (int i = 0; i < 10; ++i) {
+        assertNull(map1.get(String.valueOf(i)));
       }
+      for (int i = 10; i < 110; ++i) {
+        assertThat(map1.get(String.valueOf(i)), is("val" + i));
+      }
+      assertThat(map2.size(), is(0));
       restartStore.shutdown();
     }
   }
