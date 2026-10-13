@@ -19,15 +19,37 @@ import com.terracottatech.frs.action.ActionCodec;
 
 import java.util.Collection;
 
-public interface EncryptionHandler<I, K, V> extends ActionCodec<I, K, V> {
+public interface EncryptionCodec<I, K, V> extends ActionCodec<I, K, V> {
 
   String getCurrToken();
 
+  /**
+   * Gets the token identifying the previously used encryption key, if any.
+   *
+   * @return collection of previous key tokens
+   */
   Collection<String> getPreviousTokens();
 
+  /**
+   * Checks if the encryption key identified by the given token is being used.
+   *
+   * @param token the token identifying the encryption key to check
+   * @return true if the specified encryption key is currently in use, false otherwise
+   */
   boolean isUsingEncKey(String token);
 
+  /**
+   * Adds a new encryption key with the specified token identifier.
+   *
+   * @param token the token to identify this encryption key
+   * @param key the encryption key bytes to add
+   */
   void add(String token, byte[] key);
 
+  /**
+   * Removes the encryption key identified by the given tokens.
+   *
+   * @param tokens collection of tokens identifying the encryption key to remove
+   */
   void remove(Collection<String> tokens);
 }

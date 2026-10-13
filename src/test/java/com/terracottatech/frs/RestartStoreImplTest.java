@@ -16,7 +16,7 @@
 package com.terracottatech.frs;
 
 import com.terracottatech.frs.action.NullAction;
-import com.terracottatech.frs.cipher.EncryptionManager;
+import com.terracottatech.frs.cipher.EncryptionCodec;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -67,7 +67,7 @@ public class RestartStoreImplTest {
   private RestartStore<ByteBuffer, ByteBuffer, ByteBuffer>  restartStore;
   private ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager;
   private ActionManager                                     actionManager;
-  private EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> encryptionManager;
+  private EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> encryptionCodec;
   private ReadManager                                     readManager;
   private Compactor                                         compactor;
   private TransactionManager                                transactionManager;
@@ -84,7 +84,7 @@ public class RestartStoreImplTest {
     transactionManager = mock(TransactionManager.class);
     doReturn(handle).when(transactionManager).begin();
     objectManager = mock(ObjectManager.class);
-    encryptionManager = mock(EncryptionManager.class);
+    encryptionCodec = mock(EncryptionCodec.class);
     actionManager = mock(ActionManager.class);
     syncHappenedFuture = mock(Future.class);
     doReturn(syncHappenedFuture).when(actionManager).syncHappened(any(Action.class));
@@ -98,7 +98,7 @@ public class RestartStoreImplTest {
 
   private RestartStore<ByteBuffer, ByteBuffer, ByteBuffer> createStore() {
     return new RestartStoreImpl(objectManager, transactionManager, logManager,
-                                actionManager, encryptionManager, readManager, compactor, configuration);
+                                actionManager, encryptionCodec, readManager, compactor, configuration);
   }
 
   @Test
@@ -326,7 +326,7 @@ public class RestartStoreImplTest {
     restartStore.handleEncKeyChange("new-token", CipherHelper.generateNewKey());
 
     verify(actionManager).syncHappenedAndPause(any(NullAction.class));
-    verify(encryptionManager).add(eq("new-token"), any());
+    verify(encryptionCodec).add(eq("new-token"), any());
     verify(actionManager).resume();
     verify(compactor).compactTillLsn(eq(barrierLsn), any());
   }
@@ -371,7 +371,7 @@ public class RestartStoreImplTest {
     };
     restartStore.registerEncCompletionListener(listener);
 
-    when(encryptionManager.getPreviousTokens()).thenReturn(Collections.singletonList("old-tok"));
+    when(encryptionCodec.getPreviousTokens()).thenReturn(Collections.singletonList("old-tok"));
     restartStore.handleEncKeyChange("tok", CipherHelper.generateNewKey());
     latch.await();
 

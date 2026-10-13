@@ -23,7 +23,7 @@ import javax.crypto.KeyGenerator;
 
 import com.terracottatech.frs.config.FrsProperty;
 
-import static com.terracottatech.frs.cipher.EncryptionManagerImpl.TOKEN_KEY_DELIMITER;
+import static com.terracottatech.frs.cipher.EncryptionCodecImpl.TOKEN_KEY_DELIMITER;
 
 public class CipherHelper {
 

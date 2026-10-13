@@ -17,7 +17,7 @@ package com.terracottatech.frs;
 
 import com.terracottatech.frs.action.NullAction;
 import com.terracottatech.frs.cipher.EncryptionInRecoveryListener;
-import com.terracottatech.frs.cipher.EncryptionManager;
+import com.terracottatech.frs.cipher.EncryptionCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +80,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
   private final Compactor compactor;
   private final LogManager logManager;
   private final ActionManager actionManager;
-  private final EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> encryptionManager;
+  private final EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> encryptionCodec;
   private final ReadManager readManager;
   private final Configuration configuration;
 
@@ -99,13 +99,13 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
   // For testing purpose
   RestartStoreImpl(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager,
                    TransactionManager transactionManager, LogManager logManager,
-                   ActionManager actionManager, EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> encryptionManager,
+                   ActionManager actionManager, EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> encryptionCodec,
                    ReadManager read, Compactor compactor,
                    Configuration configuration) {
     this.transactionManager = transactionManager;
     this.objectManager = objectManager;
     this.logManager = logManager;
-    this.encryptionManager = encryptionManager;
+    this.encryptionCodec = encryptionCodec;
     this.actionManager = actionManager;
     this.readManager = read;
     this.compactor = compactor;
@@ -117,9 +117,9 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
 
   public RestartStoreImpl(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager,
                           TransactionManager transactionManager, LogManager logManager, ActionManager actionManager,
-                          EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> encryptionManager, ReadManager read, 
+                          EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> encryptionCodec, ReadManager read,
                           IOManager ioManager, Configuration configuration) throws RestartStoreException {
-    this(objectManager, transactionManager, logManager, actionManager, encryptionManager, read,
+    this(objectManager, transactionManager, logManager, actionManager, encryptionCodec, read,
         new CompactorImpl(objectManager, transactionManager, logManager, ioManager, configuration, actionManager),
         configuration);
   }
@@ -177,7 +177,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
       LOGGER.info("records from mixed tokens found in log records");
       initiateRewrite(maxLsn);
     } else {
-      if(latestEncToken != null && !latestEncToken.equals(encryptionManager.getCurrToken())) {
+      if(latestEncToken != null && !latestEncToken.equals(encryptionCodec.getCurrToken())) {
         // latest token found in log record doesn't match current token for this frs store, rewrite everything with curr token
         LOGGER.info("records with latest token completely absent in log records");
         initiateRewrite(Long.MAX_VALUE);
@@ -367,7 +367,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
     try {
       NullAction action = new NullAction();
       actionManager.syncHappenedAndPause(action);
-      encryptionManager.add(newKeyToken, Base64.getDecoder().decode(newKey));
+      encryptionCodec.add(newKeyToken, Base64.getDecoder().decode(newKey));
       LOGGER.info("Encryption with new key initiated");
       initiateRewrite(action.getLsn());
     } finally {
@@ -397,13 +397,13 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
 
   @Override
   public boolean isUsingEncKey(String token) {
-    return encryptionManager.isUsingEncKey(token);
+    return encryptionCodec.isUsingEncKey(token);
   }
 
   private void updateKeys() {
-    Collection<String> oldTokens = encryptionManager.getPreviousTokens();
+    Collection<String> oldTokens = encryptionCodec.getPreviousTokens();
     if(!oldTokens.isEmpty()) {
-      encryptionManager.remove(oldTokens);
+      encryptionCodec.remove(oldTokens);
       if(encCompletionConsumer != null) {
         encCompletionConsumer.accept(new EncryptionCompletionEventImpl(this, oldTokens, null));
       }

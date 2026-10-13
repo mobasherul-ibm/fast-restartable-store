@@ -24,8 +24,8 @@ import java.nio.ByteBuffer;
  */
 public abstract class MapActions {
   public static void registerActions(int id, ActionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec) {
-    codec.registerAction(id, 0, PutAction.class, new PutActionSubCodec());
-    codec.registerAction(id, 1, RemoveAction.class, new RemoveActionSubCodec());
-    codec.registerAction(id, 2, DeleteAction.class, new DeleteActionSubCodec());
+    codec.registerAndBind(PutAction.class, id, 0, new PutActionSubCodec());
+    codec.registerAndBind(RemoveAction.class, id, 1, new RemoveActionSubCodec());
+    codec.registerAndBind(DeleteAction.class, id, 2, new DeleteActionSubCodec());
   }
 }

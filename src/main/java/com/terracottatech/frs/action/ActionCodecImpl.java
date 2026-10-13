@@ -39,8 +39,6 @@ public final class ActionCodecImpl implements ActionCodec<ByteBuffer, ByteBuffer
   
   public static final long ACTION_HEADER_OVERHEAD = 8L;
 
-  private static final ActionID NULL_ACTION_ID = new ActionID(-1, -1);
-
   private final Map<Class<? extends Action>, ActionID> classToId = new ConcurrentHashMap<>();
   private final Map<ActionID, ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ?>> idToSubCodec = 
       new ConcurrentHashMap<>();
@@ -48,25 +46,24 @@ public final class ActionCodecImpl implements ActionCodec<ByteBuffer, ByteBuffer
 
   public ActionCodecImpl(ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager) {
     this.objectManager = objectManager;
-    registerAction(NULL_ACTION_ID, NullAction.class, NullAction.subCodec());
+    registerAndBind(NullAction.class, -1, -1, NullAction.subCodec());
   }
 
-  private synchronized <T extends Action> void registerAction(ActionID id, Class<T> actionClass,
-                                                              ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? super T> actionSubCodec) {
+  @Override
+  public synchronized <T extends Action> void registerCodec(int collectionId, int actionId,
+                                                            ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? super T> actionSubCodec) {
+    ActionID id = new ActionID(collectionId, actionId);
     if (idToSubCodec.containsKey(id)) {
       throw new IllegalArgumentException(
           "Id " + id + " already registered to action SubCodec " + idToSubCodec.get(id));
     }
 
-    classToId.put(actionClass, id);
     idToSubCodec.put(id, actionSubCodec);
   }
 
   @Override
-  public synchronized <T extends Action> void registerAction(int collectionId, int actionId,
-                                                             Class<T> actionClass,
-                                                             ActionSubCodec<ByteBuffer, ByteBuffer, ByteBuffer, ? super T> actionSubCodec) {
-    registerAction(new ActionID(collectionId, actionId), actionClass, actionSubCodec);
+  public void bind(Class<? extends Action> actionClass, int collectionId, int actionId) {
+    classToId.put(actionClass, new ActionID(collectionId, actionId));
   }
 
   @Override
@@ -110,7 +107,7 @@ public final class ActionCodecImpl implements ActionCodec<ByteBuffer, ByteBuffer
 
     static ActionID withByteBuffers(ByteBuffer[] buffers) {
       if (buffers.length == 0) {
-        return NULL_ACTION_ID;
+        return new ActionID(-1, -1);
       } else {
         return new ActionID(getInt(buffers), getInt(buffers));
       }

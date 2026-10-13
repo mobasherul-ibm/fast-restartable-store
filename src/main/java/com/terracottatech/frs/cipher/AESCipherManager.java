@@ -37,6 +37,10 @@ public class AESCipherManager implements CipherManager {
 
   private final CipherAlgorithmDelegate delegate;
 
+  public AESCipherManager() {
+    this.delegate = new AESGCMCipherDelegate();
+  }
+  
   public AESCipherManager(Map<String, byte[]> tokenToKeyMap, String currentToken) {
     tokenToKeyMap.forEach((token, keyBytes) ->
         tokenToKey.put(token, new SecretKeySpec(keyBytes, "AES")));

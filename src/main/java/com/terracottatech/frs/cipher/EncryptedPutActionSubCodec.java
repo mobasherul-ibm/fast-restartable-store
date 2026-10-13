@@ -22,7 +22,6 @@ import com.terracottatech.frs.action.ActionSubCodec;
 import com.terracottatech.frs.object.ObjectManager;
 import com.terracottatech.frs.util.ByteBufferUtils;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 

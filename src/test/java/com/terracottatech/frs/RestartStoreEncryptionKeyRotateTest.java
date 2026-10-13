@@ -32,8 +32,8 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 
-import static com.terracottatech.frs.cipher.EncryptionManagerImpl.MULTIPLE_TOKEN_KEY_DELIMITER;
-import static com.terracottatech.frs.cipher.EncryptionManagerImpl.TOKEN_KEY_DELIMITER;
+import static com.terracottatech.frs.cipher.EncryptionCodecImpl.MULTIPLE_TOKEN_KEY_DELIMITER;
+import static com.terracottatech.frs.cipher.EncryptionCodecImpl.TOKEN_KEY_DELIMITER;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;

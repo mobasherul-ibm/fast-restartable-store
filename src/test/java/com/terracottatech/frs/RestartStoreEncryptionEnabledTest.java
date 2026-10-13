@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Properties;
 
-import static com.terracottatech.frs.cipher.EncryptionManagerImpl.TOKEN_KEY_DELIMITER;
+import static com.terracottatech.frs.cipher.EncryptionCodecImpl.TOKEN_KEY_DELIMITER;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;

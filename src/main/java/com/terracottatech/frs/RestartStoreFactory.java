@@ -18,8 +18,8 @@ package com.terracottatech.frs;
 import com.terracottatech.frs.action.ActionCodecImpl;
 import com.terracottatech.frs.action.ActionManager;
 import com.terracottatech.frs.action.ActionManagerImpl;
-import com.terracottatech.frs.cipher.EncryptionManager;
-import com.terracottatech.frs.cipher.EncryptionManagerImpl;
+import com.terracottatech.frs.cipher.EncryptionCodec;
+import com.terracottatech.frs.cipher.EncryptionCodecImpl;
 import com.terracottatech.frs.compaction.CompactionActions;
 import com.terracottatech.frs.config.Configuration;
 import com.terracottatech.frs.config.FrsProperty;
@@ -53,10 +53,10 @@ public abstract class RestartStoreFactory {
   private RestartStoreFactory() {
   }
 
-  private static EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> createCodec(Configuration configuration, 
-                                                                             ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager) {
-    EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> codec =
-            new EncryptionManagerImpl(configuration, new ActionCodecImpl(objectManager));
+  private static EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> createCodec(Configuration configuration,
+                                                                                 ObjectManager<ByteBuffer, ByteBuffer, ByteBuffer> objectManager) {
+    EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec =
+        new EncryptionCodecImpl(configuration, new ActionCodecImpl(objectManager));
     MapActions.registerActions(0, codec);
     TransactionActions.registerActions(1, codec);
     CompactionActions.registerActions(2, codec);
@@ -82,7 +82,7 @@ public abstract class RestartStoreFactory {
     IOManager ioManager = new NIOManager(configuration,writingSource);
     ReadManager readManager = new ReadManagerImpl(ioManager, configuration.getString(FrsProperty.FORCE_LOG_REGION_FORMAT));
     LogManager logManager = new StagingLogManager(ioManager,writingSource,configuration);
-    EncryptionManager<ByteBuffer, ByteBuffer, ByteBuffer> codec = createCodec(configuration, objectManager);
+    EncryptionCodec<ByteBuffer, ByteBuffer, ByteBuffer> codec = createCodec(configuration, objectManager);
     ActionManager actionManager = new ActionManagerImpl(logManager, objectManager, codec,
         new MasterLogRecordFactory());
     TransactionManager transactionManager = new TransactionManagerImpl(actionManager);
