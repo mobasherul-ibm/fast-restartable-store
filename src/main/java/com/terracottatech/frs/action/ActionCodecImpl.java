@@ -17,8 +17,6 @@ package com.terracottatech.frs.action;
 
 import com.terracottatech.frs.object.ObjectManager;
 import com.terracottatech.frs.util.ByteBufferUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -35,8 +33,6 @@ public final class ActionCodecImpl implements ActionCodec<ByteBuffer, ByteBuffer
   4 bytes - ActionID.collection
   4 bytes - ActionID.action
   */
-  private static final Logger LOGGER = LoggerFactory.getLogger(ActionCodecImpl.class);
-  
   public static final long ACTION_HEADER_OVERHEAD = 8L;
 
   private final Map<Class<? extends Action>, ActionID> classToId = new ConcurrentHashMap<>();

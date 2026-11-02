@@ -35,6 +35,7 @@ import javax.crypto.spec.GCMParameterSpec;
 public class AESGCMCipherDelegate implements CipherAlgorithmDelegate {
 
   static final String ALGORITHM = "AES/GCM/NoPadding";
+  private static final SecureRandom secureRandom = new SecureRandom();
   private static final int GCM_TAG_LENGTH_BITS = 128;
   private static final int GCM_IV_LENGTH_BYTES = 12;
 
@@ -68,7 +69,7 @@ public class AESGCMCipherDelegate implements CipherAlgorithmDelegate {
   @Override
   public ByteBuffer generateInitializationVector() {
     byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
-    new SecureRandom().nextBytes(iv);
+    secureRandom.nextBytes(iv);
     return ByteBuffer.wrap(iv);
   }
 

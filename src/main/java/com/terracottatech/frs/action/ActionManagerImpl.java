@@ -163,7 +163,7 @@ public class ActionManagerImpl implements ActionManager {
     if (pauseRequestCount > 0) {
       stateLock.lock();
       try {
-        if (remaining == 0) {
+        if (remaining == 0 && pauseRequestCount > 0) {
           idleCondition.signalAll();
         }
       } finally {

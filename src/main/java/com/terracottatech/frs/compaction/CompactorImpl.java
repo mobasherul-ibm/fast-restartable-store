@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -316,6 +316,8 @@ public class CompactorImpl implements Compactor {
   public synchronized void unpause() {
     if (pauseCount > 0) {
       pauseCount--;
+    } else {
+      LOGGER.warn("unpause() called without a matching pause()");
     }
     if (pauseCount == 0) {
       paused = false;
@@ -324,7 +326,7 @@ public class CompactorImpl implements Compactor {
   }
   
   @Override
-  public CompletionStage<Void> compactTillLsn(long lsn, ExecutorService executorService) {
+  public CompletionStage<Void> compactUntilLsn(long lsn, Executor executor) {
     return CompletableFuture.runAsync(() -> {
       pause();
       try {
@@ -334,7 +336,7 @@ public class CompactorImpl implements Compactor {
       } finally {
         unpause();
       }
-    }, executorService);
+    }, executor);
   }
 
   private void rewrite(long lsn) throws ExecutionException, InterruptedException {

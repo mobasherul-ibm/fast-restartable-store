@@ -308,7 +308,7 @@ public class RestartStoreImplTest {
   }
 
   /**
-   * handleEncKeyChange() must call {@link Compactor#compactTillLsn} with exactly the LSN
+   * handleEncKeyChange() must call {@link Compactor#compactUntilLsn} with exactly the LSN
    * that was recorded on the {@link NullAction} barrier by {@link ActionManager#syncHappenedAndPause(Action)}.
    * This ensures re-encryption covers all records written before the key change.
    */
@@ -328,7 +328,7 @@ public class RestartStoreImplTest {
     verify(actionManager).syncHappenedAndPause(any(NullAction.class));
     verify(encryptionCodec).add(eq("new-token"), any());
     verify(actionManager).resume();
-    verify(compactor).compactTillLsn(eq(barrierLsn), any());
+    verify(compactor).compactUntilLsn(eq(barrierLsn), any());
   }
 
   /**
@@ -408,10 +408,10 @@ public class RestartStoreImplTest {
     if (shouldFail) {
       CompletableFuture<Void> failedFuture = new CompletableFuture<>();
       failedFuture.completeExceptionally(new RuntimeException("Rewrite failed"));
-      doReturn(failedFuture).when(compactor).compactTillLsn(anyLong(), any());
+      doReturn(failedFuture).when(compactor).compactUntilLsn(anyLong(), any());
     } else {
       doReturn(CompletableFuture.completedFuture(null))
-          .when(compactor).compactTillLsn(anyLong(), any());
+          .when(compactor).compactUntilLsn(anyLong(), any());
     }
   }
 }

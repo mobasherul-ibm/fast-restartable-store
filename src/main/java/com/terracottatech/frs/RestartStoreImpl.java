@@ -376,7 +376,7 @@ public class RestartStoreImpl implements RestartStore<ByteBuffer, ByteBuffer, By
   }
 
   private void initiateRewrite(long lsn) {
-    compactor.compactTillLsn(lsn, executorService)
+    compactor.compactUntilLsn(lsn, executorService)
         .whenComplete((res, ex) -> {
           if (ex != null) {
             if (state == State.RUNNING) {

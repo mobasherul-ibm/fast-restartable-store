@@ -16,13 +16,13 @@
 package com.terracottatech.frs.mock.compaction;
 
 import com.terracottatech.frs.action.ActionManager;
-import com.terracottatech.frs.compaction.CompactionPolicy;
 import com.terracottatech.frs.compaction.Compactor;
 import com.terracottatech.frs.object.ObjectManager;
 import com.terracottatech.frs.object.ObjectManagerEntry;
 import com.terracottatech.frs.transaction.TransactionManager;
 
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -79,7 +79,7 @@ public class MockCompactor<I, K, V> implements Compactor {
   }
 
   @Override
-  public CompletionStage<Void> compactTillLsn(long lsn, ExecutorService executorService) {
+  public CompletionStage<Void> compactUntilLsn(long lsn, Executor executor) {
     throw new UnsupportedOperationException("unsupported");
   }
 

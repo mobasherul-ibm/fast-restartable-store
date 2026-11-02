@@ -208,7 +208,7 @@ public class CompactorImplTest {
 
     try {
       java.util.concurrent.CompletionStage<Void> completionStage =
-          compactor.compactTillLsn(reWriteTillLsn, executorService);
+          compactor.compactUntilLsn(reWriteTillLsn, executorService);
 
       // Wait for completion
       completionStage.toCompletableFuture().get();

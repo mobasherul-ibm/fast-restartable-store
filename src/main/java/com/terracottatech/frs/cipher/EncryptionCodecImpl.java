@@ -56,7 +56,9 @@ public class EncryptionCodecImpl implements EncryptionCodec<ByteBuffer, ByteBuff
   }
 
   private static int convertCodecId(int collectionId) {
-    assert (collectionId < 99);
+    if (collectionId >= 99) {
+      throw new AssertionError("Invalid collectionId " + collectionId);
+    }
     return 99 + collectionId;
   }
 
